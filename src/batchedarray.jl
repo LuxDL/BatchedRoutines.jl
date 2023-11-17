@@ -5,18 +5,18 @@
 # batchsize in the type to allow construction via `undef` -- heavily used in Krylov.jl
 struct BatchedArray{T <: Number, N, D <: AbstractArray{T}, B} <: AbstractArray{T, N}
     data::D
-
-    function BatchedArray{T, B}(data::AbstractArray{T, N}) where {T, B, N}
-        @assert N > 0
-        N == 1 && (data = reshape(data, :, 1))
-        return new{T, N - 1, typeof(data), B}(data)
-    end
-    function BatchedArray{T}(data::AbstractArray{T, N}) where {T, N}
-        return BatchedArray{T, size(data, N)}(data)
-    end
-    BatchedArray{T}(data::AbstractArray) where {T} = BatchedArray{T}(T.(data))
-    BatchedArray(data::AbstractArray) = BatchedArray{eltype(data)}(data)
 end
+
+function BatchedArray{T, B}(data::AbstractArray{ T, N}) where {T, B, N}
+    @assert N > 0
+    N == 1 && (data = reshape(data, :, 1))
+    return BatchedArray{T, N - 1, typeof(data), B}(data)
+end
+function BatchedArray{T}(data::AbstractArray{T, N}) where {T, N}
+    return BatchedArray{T, size(data, N)}(data)
+end
+BatchedArray{T}(data::AbstractArray) where {T} = BatchedArray{T}(T.(data))
+BatchedArray(data::AbstractArray) = BatchedArray{eltype(data)}(data)
 
 const BatchedVector = BatchedArray{T, 1} where {T}
 const BatchedMatrix = BatchedArray{T, 2} where {T}
@@ -35,8 +35,14 @@ Base.size(B::BatchedArray, i::Integer) = size(B.data, i)
 Base.eltype(::BatchedArray{T}) where {T} = T
 Base.ndims(::BatchedArray{T, N}) where {T, N} = N
 
-Base.getindex(B::BatchedArray, args...) = getindex(B.data, args...)
-Base.setindex!(B::BatchedArray, args...) = setindex!(B.data, args...)
+Base.getindex(B::BatchedArray, args...) = getindex(B.data, args..., :)
+function Base.setindex!(B::BatchedArray, v, args...)
+    length(args) == ndims(B) + 1 && (setindex!(B.data, v, args...); return B)
+    map(batchview(B)) do Bᵢ
+        return setindex!(Bᵢ, v, args...)
+    end
+    return B
+end
 
 function Base.fill!(B::BatchedArray, args...)
     return BatchedArray{eltype(B), nbatches(B)}(fill!(B.data, args...))
@@ -138,19 +144,16 @@ function Broadcast.BroadcastStyle(::BatchedArrayStyle{N},
 end
 function Broadcast.BroadcastStyle(::BatchedArrayStyle{N},
         a::Broadcast.AbstractArrayStyle{M}) where {M, N}
-        @show M, N
     return BatchedArrayStyle(Val(max(M, N)))
 end
 function Broadcast.BroadcastStyle(::BatchedArrayStyle{M},
         ::BatchedArrayStyle{N}) where {M, N}
-        @show 1, M, N
     return BatchedArrayStyle(Val(max(M, N)))
 end
 function Base.BroadcastStyle(::Type{<:BatchedArray{T, N, A}}) where {T, N, A}
     return BatchedArrayStyle{N + 1}()
 end
 
-# FIXME: Extract batch dimension to make this type stable
 @inline function Base.copy(bc::Broadcast.Broadcasted{<:BatchedArrayStyle})
     bc = Broadcast.flatten(bc)
     T = __extract_eltype(bc.args)
@@ -179,4 +182,3 @@ end
 @inline __extract_nbatches(x::BatchedArray) = nbatches(x)
 @inline __extract_nbatches(x::AbstractArray) = 0
 @inline __extract_nbatches(x) = 0
-
