@@ -134,24 +134,28 @@ BatchedArrayStyle(::Val{N}) where {N} = BatchedArrayStyle{N}()
 Broadcast.BroadcastStyle(a::BatchedArrayStyle, ::Base.Broadcast.DefaultArrayStyle{0}) = a
 function Broadcast.BroadcastStyle(::BatchedArrayStyle{N},
         a::Broadcast.DefaultArrayStyle{M}) where {M, N}
-    return Broadcast.DefaultArrayStyle(Val(max(M, N)))
+    return BatchedArrayStyle(Val(max(M, N)))
 end
 function Broadcast.BroadcastStyle(::BatchedArrayStyle{N},
         a::Broadcast.AbstractArrayStyle{M}) where {M, N}
-    return typeof(a)(Val(max(M, N)))
+        @show M, N
+    return BatchedArrayStyle(Val(max(M, N)))
 end
 function Broadcast.BroadcastStyle(::BatchedArrayStyle{M},
         ::BatchedArrayStyle{N}) where {M, N}
+        @show 1, M, N
     return BatchedArrayStyle(Val(max(M, N)))
 end
 function Base.BroadcastStyle(::Type{<:BatchedArray{T, N, A}}) where {T, N, A}
-    return BatchedArrayStyle{N}()
+    return BatchedArrayStyle{N + 1}()
 end
 
 # FIXME: Extract batch dimension to make this type stable
 @inline function Base.copy(bc::Broadcast.Broadcasted{<:BatchedArrayStyle})
     bc = Broadcast.flatten(bc)
-    return BatchedArray(bc.f.(__unwrap_barray(bc.args)...))
+    T = __extract_eltype(bc.args)
+    N = __extract_nbatches(bc.args)
+    return BatchedArray{T, _unwrap_val(N)}(bc.f.(__unwrap_barray(bc.args)...))
 end
 
 @inline function Base.copyto!(dest::BatchedArray,
@@ -161,6 +165,18 @@ end
     return dest
 end
 
-__unwrap_barray(args::Tuple) = map(__unwrap_barray, args)
-__unwrap_barray(x::BatchedArray) = x.data
-__unwrap_barray(x) = x
+@inline _unwrap_val(x) = x
+@inline _unwrap_val(::Val{X}) where {X} = X
+
+@inline __unwrap_barray(args::Tuple) = map(__unwrap_barray, args)
+@inline __unwrap_barray(x::BatchedArray) = x.data
+@inline __unwrap_barray(x) = x
+
+@inline __extract_eltype(args::Tuple) = promote_type(map(__extract_eltype, args)...)
+@inline __extract_eltype(x) = eltype(x)
+
+@inline __extract_nbatches(args::Tuple) = Val(maximum(map(__extract_nbatches, args)))
+@inline __extract_nbatches(x::BatchedArray) = nbatches(x)
+@inline __extract_nbatches(x::AbstractArray) = 0
+@inline __extract_nbatches(x) = 0
+
