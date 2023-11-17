@@ -1,9 +1,10 @@
 name = "BatchedArrays"
-uuid = "b2108857-7c20-44ae-9111-449ecde12c47"
+uuid = "79561efe-4b4f-4a94-a6d3-cf7ade0ad6f0"
 authors = ["Avik Pal <avikpal@mit.edu> and contributors"]
 version = "0.1.0"
 
 [deps]
+ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 ConcreteStructs = "2569d6c7-a4a2-43d3-a901-331e8e4be471"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
