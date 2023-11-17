@@ -20,20 +20,12 @@ function Base.show(io::IO, QR::GenericBatchedQR)
 end
 
 ## Generic Version using a loop over the batch
-function LinearAlgebra.qr(A::BatchedMatrix, args...; kwargs...)
-    return GenericBatchedQR{eltype(A)}(map(batchview(A)) do Aᵢ
-            return qr(Aᵢ, args...; kwargs...)
-        end, size(A)[1:(end - 1)])
-end
+LinearAlgebra.qr(A::BatchedMatrix, args...; kwargs...) = qr!(copy(A), args...; kwargs...)
 
 function LinearAlgebra.qr!(A::BatchedMatrix, args...; kwargs...)
     return GenericBatchedQR{eltype(A)}(map(batchview(A)) do Aᵢ
             return qr!(Aᵢ, args...; kwargs...)
         end, size(A)[1:(end - 1)])
-end
-
-function LinearAlgebra.qr(A::BatchedVector, args...; kwargs...)
-    return qr(reshape(A, :, 1), args...; kwargs...)
 end
 
 function LinearAlgebra.qr!(A::BatchedVector, args...; kwargs...)
@@ -48,7 +40,8 @@ function LinearAlgebra.ldiv!(A::GenericBatchedQR, b::BatchedVector)
     return b
 end
 
-function LinearAlgebra.:\(A::GenericBatchedQR{T1}, b::BatchedVector{T2}) where {T1, T2}
+function LinearAlgebra.:\(A::GenericBatchedQR{T1}, b_::BatchedVector{T2}) where {T1, T2}
+    b = copy(b_)
     @assert nbatches(A) == nbatches(b)
     X = similar(b, promote_type(T1, T2), size(A, 1))
     for i in 1:nbatches(A)
@@ -76,11 +69,7 @@ function Base.show(io::IO, LU::GenericBatchedLU)
 end
 
 ## Generic Version using a loop over the batch
-function LinearAlgebra.lu(A::BatchedMatrix, args...; kwargs...)
-    return GenericBatchedLU{eltype(A)}(map(batchview(A)) do Aᵢ
-            return lu(Aᵢ, args...; kwargs...)
-        end, size(A)[1:(end - 1)])
-end
+LinearAlgebra.lu(A::BatchedMatrix, args...; kwargs...) = lu!(copy(A), args...; kwargs...)
 
 function LinearAlgebra.lu!(A::BatchedMatrix, args...; kwargs...)
     return GenericBatchedLU{eltype(A)}(map(batchview(A)) do Aᵢ
@@ -96,7 +85,8 @@ function LinearAlgebra.ldiv!(A::GenericBatchedLU, b::BatchedVector)
     return b
 end
 
-function LinearAlgebra.:\(A::GenericBatchedLU{T1}, b::BatchedVector{T2}) where {T1, T2}
+function LinearAlgebra.:\(A::GenericBatchedLU{T1}, b_::BatchedVector{T2}) where {T1, T2}
+    b = copy(b_)
     @assert nbatches(A) == nbatches(b)
     X = similar(b, promote_type(T1, T2), size(A, 1))
     for i in 1:nbatches(A)
@@ -105,12 +95,20 @@ function LinearAlgebra.:\(A::GenericBatchedLU{T1}, b::BatchedVector{T2}) where {
     return X
 end
 
-## -----------------
-## \ & ldiv!
-## -----------------
+## --------
+## Direct \
+## --------
 function LinearAlgebra.:\(A::BatchedMatrix{T1}, b::BatchedVector{T2}) where {T1, T2}
     @assert nbatches(A) == nbatches(b)
     X = similar(b, promote_type(T1, T2), size(A, 1))
+    for i in 1:nbatches(A)
+        batchview(X, i) .= batchview(A, i) \ batchview(b, i)
+    end
+    return X
+end
+
+function LinearAlgebra.ldiv!(X::BatchedVector, A::BatchedMatrix, b::BatchedVector)
+    @assert nbatches(A) == nbatches(b) == nbatches(X)
     for i in 1:nbatches(A)
         batchview(X, i) .= batchview(A, i) \ batchview(b, i)
     end

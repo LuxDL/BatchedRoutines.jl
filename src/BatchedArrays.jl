@@ -3,16 +3,16 @@ module BatchedArrays
 import PrecompileTools: @recompile_invalidations
 
 @recompile_invalidations begin
-    using ArrayInterface, ConcreteStructs, LinearAlgebra
+    using ArrayInterface, LinearAlgebra
 
-    import ArrayInterface: qr_instance
-    import Polyester: @batch
+    import Adapt
+    import ConcreteStructs: @concrete
 end
 
 include("batchedarray.jl")
 include("linearalgebra.jl")
 
-export BatchedArray
+export BatchedArray, BatchedVector, BatchedMatrix, BatchedVecOrMat
 export nbatches, batchview
 
 end

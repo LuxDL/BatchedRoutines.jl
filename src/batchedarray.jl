@@ -1,38 +1,67 @@
-struct BatchedArray{T <: Number, N, D <: AbstractArray{T, N}} <: AbstractArray{T, N}
+# Note that an N-dimensional BatchedArray is an N-1-dimensional array
+# This is done to trick a lot of SciML algorithms to think that a 3D Array is a matrix which
+# for the puposes of a BatchedArray is true.
+# NOTE: Creation of a BatchedArray will be type unstable. But we need to store the
+# batchsize in the type to allow construction via `undef` -- heavily used in Krylov.jl
+struct BatchedArray{T <: Number, N, D <: AbstractArray{T}, B} <: AbstractArray{T, N}
     data::D
 
-    function BatchedArray{T}(data::AbstractArray{T}) where {T}
-        ndims(data) == 1 && (data = reshape(data, :, 1))
-        return new{T, ndims(data), typeof(data)}(data)
+    function BatchedArray{T, B}(data::AbstractArray{T, N}) where {T, B, N}
+        @assert N > 0
+        N == 1 && (data = reshape(data, :, 1))
+        return new{T, N - 1, typeof(data), B}(data)
     end
-
+    function BatchedArray{T}(data::AbstractArray{T, N}) where {T, N}
+        return BatchedArray{T, size(data, N)}(data)
+    end
     BatchedArray{T}(data::AbstractArray) where {T} = BatchedArray{T}(T.(data))
-
-    function BatchedArray(data::AbstractArray)
-        ndims(data) == 1 && (data = reshape(data, :, 1))
-        return new{eltype(data), ndims(data), typeof(data)}(data)
-    end
+    BatchedArray(data::AbstractArray) = BatchedArray{eltype(data)}(data)
 end
 
-const BatchedVector = BatchedArray{T, 2} where {T}
-const BatchedMatrix = BatchedArray{T, 3} where {T}
+const BatchedVector = BatchedArray{T, 1} where {T}
+const BatchedMatrix = BatchedArray{T, 2} where {T}
 const BatchedVecOrMat = Union{BatchedVector, BatchedMatrix}
 
-Base.size(b::BatchedArray) = size(b.data)
-Base.size(b::BatchedArray, i::Integer) = size(b.data, i)
-Base.eltype(::BatchedArray{T}) where {T} = T
-Base.ndims(::BatchedArray{T, N}) where {T, N} = N
-
-Base.getindex(b::BatchedArray, args...) = getindex(b.data, args...)
-Base.setindex!(b::BatchedArray, args...) = setindex!(b.data, args...)
-
-nbatches(B::BatchedArray) = size(B, ndims(B))
-batchview(B::BatchedArray) = eachslice(B.data; dims=ndims(B))
-batchview(B::BatchedArray, idx::Int) = selectdim(B.data, ndims(B), idx)
+nbatches(::Type{<:BatchedArray{T, N, D, B}}) where {T, N, D, B} = B
+nbatches(::BatchedArray{T, N, D, B}) where {T, N, D, B} = B
+nbatches(A::AbstractArray) = size(A, ndims(A))
+batchview(B::BatchedArray) = eachslice(B.data; dims=ndims(B) + 1)
+batchview(B::BatchedArray, idx::Int) = selectdim(B.data, ndims(B) + 1, idx)
 batchview(B::AbstractArray) = eachslice(B; dims=ndims(B))
 batchview(B::AbstractArray, idx::Int) = selectdim(B, ndims(B), idx)
 
+Base.size(B::BatchedArray) = size(B.data)[1:(end - 1)]
+Base.size(B::BatchedArray, i::Integer) = size(B.data, i)
+Base.eltype(::BatchedArray{T}) where {T} = T
+Base.ndims(::BatchedArray{T, N}) where {T, N} = N
+
+Base.getindex(B::BatchedArray, args...) = getindex(B.data, args...)
+Base.setindex!(B::BatchedArray, args...) = setindex!(B.data, args...)
+
+function Base.fill!(B::BatchedArray, args...)
+    return BatchedArray{eltype(B), nbatches(B)}(fill!(B.data, args...))
+end
+
+Base.copy(B::BatchedArray) = BatchedArray{eltype(B), nbatches(B)}(copy(B.data))
+
+Base.similar(B::BatchedArray) = BatchedArray{eltype(B), nbatches(B)}(similar(B.data))
+function Base.similar(B::BatchedArray, ::Type{T}) where {T}
+    return BatchedArray{T, nbatches(B)}(similar(B.data, T))
+end
+function Base.similar(B::BatchedArray, dims::Dims)
+    return BatchedArray{eltype(B), nbatches(B)}(similar(B.data, (dims..., nbatches(B))))
+end
+function Base.similar(B::BatchedArray, ::Type{T}, dims::Dims) where {T}
+    return BatchedArray{T, nbatches(B)}(similar(B.data, T, (dims..., nbatches(B))))
+end
+
+function BatchedArray{T, N, D, B}(::UndefInitializer, dims...) where {T, N, D, B}
+    return BatchedArray{T, B}(D(undef, (dims..., B)))
+end
+
+# ---------------
 # Pretty Printing
+# ---------------
 _batch_print(N) = ifelse(N == 1, "1 batch", "$(N) batches")
 function _batched_summary(io, B::BatchedArray{T, N}, inds) where {T, N}
     print(io, Base.dims2string(length.(inds)), " BatchedArray{$T, $N} with ")
@@ -50,29 +79,54 @@ function Base.array_summary(io::IO, B::BatchedArray, inds)
     return print(io, " with indices ", Base.inds2string(inds))
 end
 
+function Base.show(io::IO, m::MIME"text/plain", B::BatchedArray)
+    _batched_summary(io, B, axes(B))
+    print(io, " with data ")
+    show(io, m, B.data)
+    return
+end
+
+# ---------
 # Reshaping
+# ---------
+# Reshapes are performed without specifying the number of batches
 function Base.reshape(B::BatchedArray, dims::Tuple{Vararg{Union{Colon, Int}}})
     dims_ = Base._reshape_uncolon(B.data, (dims..., nbatches(B)))
     return reshape(B, dims_[1:(end - 1)])
 end
 
 function Base.reshape(B::BatchedArray, dims::Dims)
-    return BatchedArray(reshape(B.data, (dims..., nbatches(B))))
+    return BatchedArray{eltype(B), nbatches(B)}(reshape(B.data, (dims..., nbatches(B))))
 end
 
 Base.vec(B::BatchedArray) = reshape(B, :)
 Base.vec(B::BatchedVector) = B
 
-Base.similar(B::BatchedArray) = BatchedArray(similar(B.data))
-Base.similar(B::BatchedArray, ::Type{T}) where {T} = BatchedArray(similar(B.data, T))
-function Base.similar(B::BatchedArray, dims::Dims)
-    return BatchedArray(similar(B.data, (dims..., nbatches(B))))
-end
-function Base.similar(B::BatchedArray, ::Type{T}, dims::Dims) where {T}
-    return BatchedArray(similar(B.data, T, (dims..., nbatches(B))))
+function Base.permutedims(B::BatchedArray, perm)
+    L, N = length(perm), ndims(B)
+    if length(perm) == N
+        return BatchedArray{eltype(B), nbatches(B)}(permutedims(B.data,
+            (perm..., nbatches(B))))
+    elseif length(perm) == ndims(B) + 1
+        @assert last(perm)==L "For BatchedArrays, the last dimension must be the batch \
+                               dimension!"
+        return BatchedArray{eltype(B), nbatches(B)}(permutedims(B.data, perm))
+    else
+        error("Cannot permute a $(N) dimensional BatchedArray to $(L) dimensions")
+    end
 end
 
+# -------------------
+# Adapt Compatibility
+# -------------------
+function Adapt.adapt_structure(to, B::BatchedArray)
+    data = Adapt.adapt(to, B.data)
+    return BatchedArray{eltype(data), nbatches(B)}(data)
+end
+
+# ------------
 # Broadcasting
+# ------------
 ## Implementation taken from https://github.com/SciML/RecursiveArrayTools.jl/blob/master/src/vector_of_array.jl
 struct BatchedArrayStyle{N} <: Broadcast.AbstractArrayStyle{N} end
 BatchedArrayStyle(::Val{N}) where {N} = BatchedArrayStyle{N}()
@@ -94,6 +148,7 @@ function Base.BroadcastStyle(::Type{<:BatchedArray{T, N, A}}) where {T, N, A}
     return BatchedArrayStyle{N}()
 end
 
+# FIXME: Extract batch dimension to make this type stable
 @inline function Base.copy(bc::Broadcast.Broadcasted{<:BatchedArrayStyle})
     bc = Broadcast.flatten(bc)
     return BatchedArray(bc.f.(__unwrap_barray(bc.args)...))
