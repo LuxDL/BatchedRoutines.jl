@@ -16,3 +16,18 @@
 `BatchedArrays.jl` provides a way to convert regular SciML solvers into batched solvers,
 i.e., solving multiple independent problems simultaneously. This is mostly useful in the
 machine learning context.
+
+For people familiar with `jax` and `functorch`, this is similar to a poor man's `vmap`. It
+effectively takes your code written for an ND-Array and tries to generalize it to
+(N+1)D-Arrays.
+
+> [*WARNING*]
+> This package is currently experimental and it is highly advisable not to directly depend
+> on it. Support for SciML applications is available only after loading this package
+> explicitly.
+
+## Common Problems
+
+* Some operations might lead to a stack overflow, this is because standard indexing into a
+  `BatchedArray` returns a `BatchedVector`. This is not un-intentional! If you encounter
+  this issue, open an issue, these are quite trivial to fix.

@@ -124,8 +124,7 @@ function __batched_mul_generic!(C::BatchedMatrix, A::BatchedMatrix, B::BatchedMa
     return C
 end
 
-## TODO (medium-priority): Use LoopVectorization/Tullio for small matrices
-function __batched_gemm_cpu_tullio! end
+function __batched_gemm_tullio! end
 
 ## TODO (medium-priority): Use MKL batched blas routines if MKL is loaded
 function __batched_gemm_cpu_mkl! end
@@ -163,9 +162,6 @@ function __batched_gemm_cpu!(transA::AbstractChar, transB::AbstractChar, α::T,
                 Bᵢ = batchview(B, i)
                 BLAS.gemm!(transA, transB, α, Aᵢ, Bᵢ, β, Cᵢ)
             end
-        end
-        for (Cᵢ, Aᵢ, Bᵢ) in zip(batchview(C), batchview(A), batchview(B))
-            BLAS.gemm!(transA, transB, α, Aᵢ, Bᵢ, β, Cᵢ)
         end
         BLAS.set_num_threads(old_threads)
     else

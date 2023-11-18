@@ -81,6 +81,14 @@ function BatchedArray{T, N, D, B}(::UndefInitializer, dims...) where {T, N, D, B
     return BatchedArray{T, B}(D(undef, (dims..., B)))
 end
 
+# ---------
+# Reduction
+# ---------
+# Forward Reduction Operations to the internal array
+function Base.mapreduce(f::F, op::OP, B::BatchedArray; kwargs...) where {F, OP}
+    return mapreduce(f, op, B.data; kwargs...)
+end
+
 # -------------
 # Concatenation
 # -------------
@@ -121,6 +129,27 @@ function Base.show(io::IO, m::MIME"text/plain", B::BatchedArray)
     print(io, " with data ")
     show(io, m, B.data)
     return
+end
+
+# TODO: Make this a bit better, but currently atleast lets `@show` work
+function Base.show_vector(io::IO, v::BatchedVector, opn='[', cls=']')
+    prefix, implicit = Base.typeinfo_prefix(io, v)
+    print(io, prefix)
+    # directly or indirectly, the context now knows about eltype(v)
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(v))
+    end
+    limited = get(io, :limit, false)::Bool
+
+    if limited && length(v) > 20
+        axs1 = axes1(v)
+        f, l = first(axs1), last(axs1)
+        Base.show_delim_array(io, v.data, opn, ",", "", false, f, f + 9)
+        print(io, "  …  ")
+        Base.show_delim_array(io, v.data, "", ",", cls, false, l - 9, l)
+    else
+        Base.show_delim_array(io, v.data, opn, ",", cls, false)
+    end
 end
 
 # ---------
@@ -206,7 +235,16 @@ end
 @inline __unwrap_barray(x) = x
 
 @inline __extract_eltype(args::Tuple) = promote_type(map(__extract_eltype, args)...)
-@inline __extract_eltype(x) = eltype(x)
+@inline __extract_eltype(x::AbstractArray) = eltype(x)
+@inline __extract_eltype(x::Number) = typeof(x)
+# These appear in integer power operations
+for xType in (Base.RefValue{typeof(^)}, Base.RefValue{Val{N}} where {N})
+    @eval __extract_eltype(::$(xType)) = Bool
+end
+@inline function __extract_eltype(x)
+    throw(ArgumentError("Encountered $(x)::$(typeof(x)) in broadcast with BatchedArray. \
+                         This is currently unhandled. Please open an issue with a MWE!"))
+end
 
 @inline __extract_nbatches(args::Tuple) = Val(maximum(map(__extract_nbatches, args)))
 @inline __extract_nbatches(x::BatchedArray) = nbatches(x)
