@@ -2,7 +2,7 @@
 # Entry Point
 function _batched_mul(A::BatchedArray{T1}, B::BatchedArray{T2}) where {T1, T2}
     @assert ndims(A) ≤ 2 && ndims(B) ≤ 2
-    # TODO: Implement this!!!
+    # TODO (high-priority): Implement this!!!
     error(1)
 end
 
@@ -13,7 +13,7 @@ function _batched_mul(A::BatchedMatrix{T1}, B::BatchedMatrix{T2}) where {T1, T2}
     return __batched_mul(__storage_typejoin(A, B), A, B)
 end
 
-# TODO: Implement this for non matrix Batched Matvec!!!
+# TODO (high-priority): Implement this for non matrix Batched Matvec!!!
 
 function _batched_mul!(C::BatchedMatrix{T}, A::BatchedMatrix, B::BatchedMatrix,
         α::Number=one(T), β::Number=zero(T)) where {T}
@@ -36,14 +36,22 @@ function __batched_mul(::Type{<:DenseArray{T}}, A::BatchedMatrix,
     return C
 end
 
-function __batched_mul!(::Type, C::BatchedMatrix, A::BatchedMatrix, B::BatchedMatrix,
-        α::Number, β::Number)
+function __batched_mul!(::Type{T}, C::BatchedMatrix, A::BatchedMatrix, B::BatchedMatrix,
+        α::Number, β::Number) where {T}
+    @debug "`__batched_mul!` got non Concrete Type $T. Using generic fallback!"
     __batched_mul_generic!(C, A, B, α, β)
     return C
 end
 
-function __batched_mul!(::Type{DT}, C::BatchedMatrix, A::BatchedMatrix, B::BatchedMatrix,
-        α::Number, β::Number) where {DT <: DenseArray{<:BlasFloat}}
+# FIXME (low-priority): Inconsistency between BlasFloat and cuBlasFloat here for Float16.
+function __batched_mul!(::Type{DT}, C::BatchedMatrix, A::BatchedMatrix,
+        B::BatchedMatrix, α::Number, β::Number) where {DT <: DenseArray{<:BlasFloat}}
+    __batched_mul_try_gemm!(DT, C, A, B, α, β)
+    return C
+end
+
+function __batched_mul_try_gemm!(::Type{DT}, C::BatchedMatrix, A::BatchedMatrix,
+        B::BatchedMatrix, α::Number, β::Number) where {DT <: DenseArray{<:BlasFloat}}
     T = eltype(DT)
     α, β = promote(α, β, T(0))
 
@@ -54,42 +62,55 @@ function __batched_mul!(::Type{DT}, C::BatchedMatrix, A::BatchedMatrix, B::Batch
     (__is_strided(A) || __is_strided(B) || __is_strided(C)) ||
         return __batched_mul_generic!(C, A, B, α, β)
 
-    # TODO: Implement this!!!
-    # blasA, transA = if A isa BatchedAdjoint && T <: Complex
-    #     Base.stride(parent(A),1) == 1 || return batched_mul_generic!(C, A, B, α, β)
-    #     parent(A), 'C'
-    # elseif Base.stride(A,2) == 1 && size(A,1) > 1
-    #     batched_transpose(A), 'T'
-    # elseif Base.stride(A,1) == 1
-    #     A, 'N'
-    # elseif Base.stride(A,2) == 1  # This is awful, but exhaustively tested. Issues 268, 282.
-    #     batched_transpose(A), 'T'
-    # else
-    #     return batched_mul_generic!(C, A, B, α, β)
-    # end
+    A_data, B_data = A.data, B.data
 
-    # blasB, transB = if B isa BatchedAdjoint && T <: Complex
-    #     Base.stride(parent(B),1) == 1 || return batched_mul_generic!(C, A, B, α, β)
-    #     parent(B), 'C'
-    # elseif Base.stride(B,2) == 1 && size(B,1) > 1
-    #     batched_transpose(B), 'T'
-    # elseif Base.stride(B,1) == 1
-    #     B, 'N'
-    # elseif Base.stride(B,2) == 1
-    #     batched_transpose(B), 'T'
-    # else
-    #     return batched_mul_generic!(C, A, B, α, β)
-    # end
+    blasA, transA = if A_data isa PermutedDimsArray{<:AbstractArray, (2, 1, 3)} &&
+                       T <: Complex
+        stride(parent(A_data), 1) == 1 || return batched_mul_generic!(C, A, B, α, β)
+        BatchedArray{T, nbatches(A)}(parent(A_data)), 'C'
+    elseif stride(A_data, 2) == 1 && size(A_data, 1) > 1
+        transpose(A), 'T'
+    elseif stride(A_data, 1) == 1
+        A, 'N'
+    elseif stride(A_data, 2) == 1
+        transpose(A), 'T'
+    else
+        return __batched_mul_generic!(C, A, B, α, β)
+    end
 
-    # _batched_gemm!(DT, transA, transB, alpha, blasA, blasB, beta, C)
-    # C
+    blasB, transB = if B_data isa PermutedDimsArray{<:AbstractArray, (2, 1, 3)} &&
+                       T <: Complex
+        stride(parent(B_data), 1) == 1 || return batched_mul_generic!(C, A, B, α, β)
+        BatchedArray{T, nbatches(B)}(parent(B_data)), 'C'
+    elseif stride(B_data, 2) == 1 && size(B_data, 1) > 1
+        transpose(B), 'T'
+    elseif stride(B_data, 1) == 1
+        B, 'N'
+    elseif stride(B_data, 2) == 1
+        transpose(B), 'T'
+    else
+        return __batched_mul_generic!(C, A, B, α, β)
+    end
+
+    __batched_gemm!(DT, transA, transB, α, blasA, A, blasB, B, β, C)
+    return C
 end
 
-function __batched_gemm!(::Type{<:Array}, transA::Char, transB::Char, α::Number, A, B,
-        β::Number, C)
-    # TODO: We should use a polyalgorithm to decide between Looped BLAS & Threaded BLAS vs
-    # TODO: MKL Batched vs Tullio/LV
+# FIXME (med-priority): For Static Arrays force using LV implementation
+
+function __batched_gemm!(::Type{<:Array}, transA::Char, transB::Char, α::Number, A, org_A,
+        B, org_B, β::Number, C)
+    # TODO (medium-priority): We should use a polyalgorithm to decide between Looped BLAS &
+    # TODO (medium-priority): Threaded BLAS vs MKL Batched vs Tullio/LV
     return __batched_gemm_cpu!(transA, transB, α, A, B, β, C)
+end
+
+function __batched_gemm!(::Type{T}, transA::Char, transB::Char, α::Number, A, org_A,
+        B, org_B, β::Number, C) where {T}
+    # If we don't have a specific blas dispatch implemented, just use the generic matmul
+    # instead of failing!
+    @debug "Tried using `__batched_gemm!` for $(T) but no direct dispatch found!"
+    return __batched_mul_generic!(C, org_A, org_B, α, β)
 end
 
 # Core Implementation
@@ -103,10 +124,10 @@ function __batched_mul_generic!(C::BatchedMatrix, A::BatchedMatrix, B::BatchedMa
     return C
 end
 
-## TODO: Use LoopVectorization/Tullio for small matrices
+## TODO (medium-priority): Use LoopVectorization/Tullio for small matrices
 function __batched_gemm_cpu_tullio! end
 
-## TODO: Use MKL batched blas routines if MKL is loaded
+## TODO (medium-priority): Use MKL batched blas routines if MKL is loaded
 function __batched_gemm_cpu_mkl! end
 
 function __batched_gemm_cpu!(transA::AbstractChar, transB::AbstractChar, α::T,

@@ -2,6 +2,6 @@ module BatchedArraysBlockDiagonalsExt
 
 using BatchedArrays, BlockDiagonals
 
-BlockDiagonals.BlockDiagonal(B::BatchedMatrix) = BlockDiagonal(collect(batchview(B)))
+BlockDiagonals.BlockDiagonal(B::BatchedMatrix) = BlockDiagonal(batchview(B))
 
 end

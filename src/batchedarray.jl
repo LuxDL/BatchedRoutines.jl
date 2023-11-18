@@ -27,10 +27,16 @@ const BatchedVecOrMat = Union{BatchedVector, BatchedMatrix}
 nbatches(::Type{<:BatchedArray{T, N, D, B}}) where {T, N, D, B} = B
 nbatches(::BatchedArray{T, N, D, B}) where {T, N, D, B} = B
 nbatches(A::AbstractArray) = size(A, ndims(A))
-batchview(B::BatchedArray) = eachslice(B.data; dims=ndims(B) + 1)
-batchview(B::BatchedArray, idx::Int) = selectdim(B.data, ndims(B) + 1, idx)
-batchview(B::AbstractArray) = eachslice(B; dims=ndims(B))
-batchview(B::AbstractArray, idx::Int) = selectdim(B, ndims(B), idx)
+# NOTE: Don't use eachslice here, because it always returns a view whereas for contiguous
+#       types we want to return an array and not a subarray
+function batchview(B::BatchedArray)
+    return map(i -> view(B.data, ntuple(_ -> Colon(), ndims(B))..., i), 1:nbatches(B))
+end
+batchview(B::BatchedArray, idx::Int) = view(B.data, ntuple(_ -> Colon(), ndims(B))..., idx)
+function batchview(B::AbstractArray)
+    return map(i -> view(B, ntuple(_ -> Colon(), ndims(B) - 1)..., i), 1:nbatches(B))
+end
+batchview(B::AbstractArray, idx::Int) = view(B, ntuple(_ -> Colon(), ndims(B) - 1)..., idx)
 
 Base.size(B::BatchedArray) = size(B.data)[1:(end - 1)]
 Base.size(B::BatchedArray, i::Integer) = size(B.data, i)

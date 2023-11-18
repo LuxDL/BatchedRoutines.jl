@@ -8,7 +8,7 @@ function defaultalg(::BatchedMatrix, ::BatchedVector, oa::OperatorAssumptions)
     return DefaultLinearSolver(DefaultAlgorithmChoice.DirectLdiv!)
 end
 
-# TODO: Remove cholesky once implemented
+# TODO (mdeium-priority): Remove cholesky once implemented
 for alg in (:SVDFactorization, :MKLLUFactorization, :DiagonalFactorization,
     :SparspakFactorization, :KLUFactorization, :UMFPACKFactorization,
     :GenericLUFactorization, :RFLUFactorization, :BunchKaufmanFactorization,

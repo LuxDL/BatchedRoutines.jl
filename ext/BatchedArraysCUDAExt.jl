@@ -1,13 +1,24 @@
 module BatchedArraysCUDAExt
 
 using BatchedArrays, CUDA, LinearAlgebra
-import BatchedArrays: _batch_print, nbatches, batchview
+import BatchedArrays: _batch_print, nbatches, batchview, __batched_gemm!
 import ConcreteStructs: @concrete
 
 const CuBatchedArray = BatchedArray{T, N, <:CUDA.AnyCuArray{T, N}} where {T, N}
 const CuBatchedVector = CuBatchedArray{T, 2} where {T}
 const CuBatchedMatrix = CuBatchedArray{T, 3} where {T}
 const CuBatchedVecOrMat = Union{CuBatchedVector, CuBatchedMatrix}
+
+const CuBlasFloat = Union{Float16, Float32, Float64, ComplexF32, ComplexF64}
+
+# ---------------------
+# Matrix Multiplication
+# ---------------------
+function __batched_gemm!(::Type{<:CuArray{<:CuBlasFloat}}, transA::Char, transB::Char,
+        α::Number, A, org_A, B, org_B, β::Number, C)
+    CUBLAS.gemm_strided_batched!(transA, transB, α, A.data, B.data, β, C.data)
+    return C
+end
 
 # ----------
 # Batched QR
@@ -36,11 +47,11 @@ function LinearAlgebra.qr!(A::CuBatchedMatrix, ::LinearAlgebra.ColumnNorm, args.
 end
 
 function LinearAlgebra.qr!(A::CuBatchedMatrix, args...; kwargs...)
-    τ, factors = CUBLAS.geqrf_batched!(collect(batchview(A)))
+    τ, factors = CUBLAS.geqrf_batched!(batchview(A))
     return CuBatchedQR{eltype(A)}(factors, τ, size(A)[1:(end - 1)])
 end
 
-# FIXME: Unfortunately there is no direct batched solver in CUSOLVER
+# FIXME (medium-priority): Unfortunately there is no direct batched solver in CUSOLVER
 function LinearAlgebra.ldiv!(A::CuBatchedQR{T1}, b::CuBatchedVector{T2}) where {T1, T2}
     @assert nbatches(A) == nbatches(b)
     for i in 1:nbatches(A)

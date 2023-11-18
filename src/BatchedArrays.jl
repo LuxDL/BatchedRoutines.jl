@@ -10,8 +10,8 @@ import PrecompileTools: @recompile_invalidations
     import LinearAlgebra: BlasFloat, BlasInt
 end
 
-include("utils.jl")
 include("batchedarray.jl")
+include("utils.jl")
 
 # Low-Level possibly direct BLAS/LAPACK code
 include("lowlevel/batched_mul.jl")
