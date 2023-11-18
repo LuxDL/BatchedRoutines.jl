@@ -7,7 +7,7 @@ import PrecompileTools: @recompile_invalidations
 
     import Adapt
     import ConcreteStructs: @concrete
-    import LinearAlgebra: BlasFloat
+    import LinearAlgebra: BlasFloat, BlasInt
 end
 
 include("utils.jl")

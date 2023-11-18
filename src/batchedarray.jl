@@ -9,7 +9,7 @@ struct BatchedArray{T <: Number, N, D <: AbstractArray{T}, B} <: AbstractArray{T
     data::D
 end
 
-function BatchedArray{T, B}(data::AbstractArray{ T, N}) where {T, B, N}
+function BatchedArray{T, B}(data::AbstractArray{T, N}) where {T, B, N}
     @assert N > 0
     N == 1 && (data = reshape(data, :, 1))
     return BatchedArray{T, N - 1, typeof(data), B}(data)
@@ -36,6 +36,11 @@ Base.size(B::BatchedArray) = size(B.data)[1:(end - 1)]
 Base.size(B::BatchedArray, i::Integer) = size(B.data, i)
 Base.eltype(::BatchedArray{T}) where {T} = T
 Base.ndims(::BatchedArray{T, N}) where {T, N} = N
+
+Base.strides(B::BatchedArray) = strides(B.data)[1:(end - 1)]
+function Base.unsafe_convert(::Type{Ptr{T}}, B::BatchedArray) where {T}
+    return Base.unsafe_convert(Ptr{T}, B.data)
+end
 
 function Base.getindex(B::BatchedArray, args...)
     length(args) == ndims(B) + 1 && return getindex(B.data, args...)

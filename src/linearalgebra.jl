@@ -4,16 +4,20 @@
 ## ---------------------
 ## For CPUs there is probably some advantage of threading when the batch dimension is large
 ## but for now we just use a loop
-function LinearAlgebra.mul!(C::BatchedMatrix, A::BatchedMatrix, B::BatchedMatrix)
-    @assert nbatches(A) == nbatches(B) == nbatches(C)
-    for (Cᵢ, Aᵢ, Bᵢ) in zip(batchview(C), batchview(A), batchview(B))
-        mul!(Cᵢ, Aᵢ, Bᵢ)
-    end
+function LinearAlgebra.mul!(C::BatchedVecOrMat, A::BatchedVecOrMat, B::BatchedVecOrMat)
+    _batched_mul!(C, A, B)
     return C
 end
 
-# TODO: 5 arg mul!
-# TODO: gemv
+function LinearAlgebra.mul!(C::BatchedVecOrMat, A::BatchedVecOrMat, B::BatchedVecOrMat,
+        α::Number, β::Number)
+    _batched_mul!(C, A, B, α, β)
+    return C
+end
+
+function Base.:*(A::BatchedVecOrMat, B::BatchedVecOrMat)
+    return __batched_mul(__storage_typejoin(A, B), A, B)
+end
 
 ## -------------------
 ## Transpose / Adjoint
