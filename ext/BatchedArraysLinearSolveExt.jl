@@ -1,13 +1,8 @@
 module BatchedArraysLinearSolveExt
 
-import PrecompileTools: @recompile_invalidations
-
-@recompile_invalidations begin
-    using BatchedArrays, LinearSolve
-
-    import LinearSolve: defaultalg,
-        do_factorization, init_cacheval, DefaultLinearSolver, DefaultAlgorithmChoice
-end
+using BatchedArrays, LinearSolve
+import LinearSolve: defaultalg,
+    do_factorization, init_cacheval, DefaultLinearSolver, DefaultAlgorithmChoice
 
 function defaultalg(::BatchedMatrix, ::BatchedVector, oa::OperatorAssumptions)
     return DefaultLinearSolver(DefaultAlgorithmChoice.DirectLdiv!)

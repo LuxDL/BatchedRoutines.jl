@@ -1,13 +1,8 @@
 module BatchedArraysCUDAExt
 
-import PrecompileTools: @recompile_invalidations
-
-@recompile_invalidations begin
-    using BatchedArrays, CUDA, LinearAlgebra
-
-    import BatchedArrays: _batch_print, nbatches, batchview
-    import ConcreteStructs: @concrete
-end
+using BatchedArrays, CUDA, LinearAlgebra
+import BatchedArrays: _batch_print, nbatches, batchview
+import ConcreteStructs: @concrete
 
 const CuBatchedArray = BatchedArray{T, N, <:CUDA.AnyCuArray{T, N}} where {T, N}
 const CuBatchedVector = CuBatchedArray{T, 2} where {T}

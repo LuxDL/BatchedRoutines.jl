@@ -70,6 +70,21 @@ function BatchedArray{T, N, D, B}(::UndefInitializer, dims...) where {T, N, D, B
     return BatchedArray{T, B}(D(undef, (dims..., B)))
 end
 
+# -------------
+# Concatenation
+# -------------
+for op in (:vcat, :hcat, :hvcat)
+    @eval begin
+        function Base.$(op)(Bs::BatchedArray...)
+            Ns = nbatches.(Bs)
+            @assert all(==(first(Ns)), Ns)
+            T = promote_type(eltype.(Bs)...)
+            return BatchedArray{T, first(Ns)}(mapreduce(Base.Fix2(getproperty, :data),
+                $(op), Bs))
+        end
+    end
+end
+
 # ---------------
 # Pretty Printing
 # ---------------
