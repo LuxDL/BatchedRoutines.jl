@@ -1,4 +1,31 @@
-# Matrix Multiply
+# Common Operations
+## ---------------------
+## Matrix Multiplication
+## ---------------------
+## For CPUs there is probably some advantage of threading when the batch dimension is large
+## but for now we just use a loop
+function LinearAlgebra.mul!(C::BatchedMatrix, A::BatchedMatrix, B::BatchedMatrix)
+    @assert nbatches(A) == nbatches(B) == nbatches(C)
+    for (Cᵢ, Aᵢ, Bᵢ) in zip(batchview(C), batchview(A), batchview(B))
+        mul!(Cᵢ, Aᵢ, Bᵢ)
+    end
+    return C
+end
+
+# TODO: 5 arg mul!
+# TODO: gemv
+
+## -------------------
+## Transpose / Adjoint
+## -------------------
+function Base.adjoint(A::BatchedMatrix{T}) where {T}
+    T <: Real || error("`adjoint` for Complex valued Batched Matrices not implemented!")
+    return BatchedArray{eltype(A), nbatches(A)}(PermutedDimsArray(A.data, (2, 1, 3)))
+end
+
+function Base.transpose(A::BatchedMatrix{T}) where {T}
+    return BatchedArray{eltype(A), nbatches(A)}(PermutedDimsArray(A.data, (2, 1, 3)))
+end
 
 # Factorizations
 ## -----------------

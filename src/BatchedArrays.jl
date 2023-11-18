@@ -7,7 +7,13 @@ import PrecompileTools: @recompile_invalidations
 
     import Adapt
     import ConcreteStructs: @concrete
+    import LinearAlgebra: BlasFloat
 end
+
+include("utils.jl")
+
+# Low-Level possibly direct BLAS/LAPACK code
+include("lowlevel/batched_mul.jl")
 
 include("batchedarray.jl")
 include("linearalgebra.jl")

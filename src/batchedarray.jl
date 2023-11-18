@@ -3,6 +3,8 @@
 # for the puposes of a BatchedArray is true.
 # NOTE: Creation of a BatchedArray will be type unstable. But we need to store the
 # batchsize in the type to allow construction via `undef` -- heavily used in Krylov.jl
+# This assumes that we can store the batched array in a contiguous fashion. Support for
+# non-contiguous structured arrays is planned but not very high priority.
 struct BatchedArray{T <: Number, N, D <: AbstractArray{T}, B} <: AbstractArray{T, N}
     data::D
 end
@@ -35,11 +37,14 @@ Base.size(B::BatchedArray, i::Integer) = size(B.data, i)
 Base.eltype(::BatchedArray{T}) where {T} = T
 Base.ndims(::BatchedArray{T, N}) where {T, N} = N
 
-Base.getindex(B::BatchedArray, args...) = getindex(B.data, args..., :)
+function Base.getindex(B::BatchedArray, args...)
+    length(args) == ndims(B) + 1 && return getindex(B.data, args...)
+    return BatchedArray{eltype(B), nbatches(B)}(reshape(getindex(B.data, args..., :), 1, :))
+end
 function Base.setindex!(B::BatchedArray, v, args...)
     length(args) == ndims(B) + 1 && (setindex!(B.data, v, args...); return B)
-    map(batchview(B)) do Bᵢ
-        return setindex!(Bᵢ, v, args...)
+    for Bᵢ in batchview(B)
+        setindex!(Bᵢ, v, args...)
     end
     return B
 end
@@ -111,8 +116,7 @@ Base.vec(B::BatchedVector) = B
 function Base.permutedims(B::BatchedArray, perm)
     L, N = length(perm), ndims(B)
     if length(perm) == N
-        return BatchedArray{eltype(B), nbatches(B)}(permutedims(B.data,
-            (perm..., nbatches(B))))
+        return BatchedArray{eltype(B), nbatches(B)}(permutedims(B.data, (perm..., N + 1)))
     elseif length(perm) == ndims(B) + 1
         @assert last(perm)==L "For BatchedArrays, the last dimension must be the batch \
                                dimension!"
