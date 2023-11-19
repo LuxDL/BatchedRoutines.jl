@@ -4,10 +4,10 @@ using BatchedArrays, CUDA, LinearAlgebra
 import BatchedArrays: _batch_print, nbatches, batchview, __batched_gemm!
 import ConcreteStructs: @concrete
 
-const CuBatchedArray = BatchedArray{T, N, <:CUDA.AnyCuArray{T, N}} where {T, N}
-const CuBatchedVector = CuBatchedArray{T, 2} where {T}
-const CuBatchedMatrix = CuBatchedArray{T, 3} where {T}
-const CuBatchedVecOrMat = Union{CuBatchedVector, CuBatchedMatrix}
+const CuBatchedArray = BatchedArray{T, N, <:CUDA.AnyCuArray{T}} where {T, N}
+const CuBatchedVector = CuBatchedArray{T, 1} where {T}
+const CuBatchedMatrix = CuBatchedArray{T, 2} where {T}
+const CuBatchedVecOrMat{T} = Union{CuBatchedVector{T}, CuBatchedMatrix{T}} where {T}
 
 const CuBlasFloat = Union{Float16, Float32, Float64, ComplexF32, ComplexF64}
 
@@ -75,6 +75,55 @@ end
 # ----------
 # Batched LU
 # ----------
+@concrete struct CuBatchedLU{T}
+    factors
+    pivot_array
+    info
+    size
+end
+
+nbatches(LU::CuBatchedLU) = nbatches(LU.factors)
+batchview(LU::CuBatchedLU) = zip(batchview(LU.factors), batchview(LU.pivot_array), LU.info)
+function batchview(LU::CuBatchedLU, idx::Int)
+    return batchview(LU.factors, idx), batchview(LU.pivot_array, idx), LU.info[idx]
+end
+Base.size(LU::CuBatchedLU) = LU.size
+Base.size(LU::CuBatchedLU, i::Integer) = LU.size[i]
+
+function Base.show(io::IO, LU::CuBatchedLU)
+    return print(io, "CuBatchedLU() with $(_batch_print(nbatches(LU)))")
+end
+
+LinearAlgebra.lu(A::CuBatchedMatrix, args...; kwargs...) = lu!(copy(A), args...; kwargs...)
+
+function LinearAlgebra.lu!(A::CuBatchedMatrix, args...; check::Bool=true, kwargs...)
+    pivot = length(args) == 0 ? RowMaximum() : first(pivot)
+    pivot_array, info_, factors = CUBLAS.getrf_strided_batched!(A.data, !(pivot isa NoPivot))
+    info = Array(info_)
+    check && LinearAlgebra.checknonsingular.(info)
+    return CuBatchedLU{eltype(A)}(factors, pivot_array, info, size(A)[1:(end - 1)])
+end
+
+# FIXME (medium-priority): Unfortunately there is no direct batched solver in CUSOLVER
+function LinearAlgebra.ldiv!(A::CuBatchedLU{T1}, b::CuBatchedVector{T2}) where {T1, T2}
+    @assert nbatches(A) == nbatches(b)
+    for i in 1:nbatches(A)
+        Fᵢ, pᵢ, info = batchview(A, i)
+        ldiv!(LU(Fᵢ, pᵢ, info), batchview(b, i))
+    end
+    return b
+end
+
+function LinearAlgebra.:\(A::CuBatchedLU{T1}, b_::CuBatchedVector{T2}) where {T1, T2}
+    b = copy(b_)
+    @assert nbatches(A) == nbatches(b)
+    X = similar(b, promote_type(T1, T2), size(A, 1))
+    for i in 1:nbatches(A)
+        Fᵢ, pᵢ, info = batchview(A, i)
+        ldiv!(batchview(X, i), LU(Fᵢ, pᵢ, Int(info)), batchview(b, i))
+    end
+    return X
+end
 
 ## --------
 ## Direct \

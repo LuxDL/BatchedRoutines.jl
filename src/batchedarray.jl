@@ -26,6 +26,7 @@ function BatchedArray{T, B}(data::AbstractArray{T, N}) where {T, B, N}
     N == 1 && (data = reshape(data, :, 1))
     return BatchedArray{T, N - 1, typeof(data), B}(data)
 end
+BatchedArray{T, B}(data::AbstractArray) where {T, B} = BatchedArray{T, B}(T.(data))
 function BatchedArray{T}(data::AbstractArray{T, N}) where {T, N}
     return BatchedArray{T, size(data, N)}(data)
 end
@@ -227,9 +228,9 @@ end
 
 @inline function Base.copy(bc::Broadcast.Broadcasted{<:BatchedArrayStyle})
     bc = Broadcast.flatten(bc)
-    T = __extract_eltype(bc.args)
     N = __extract_nbatches(bc.args)
-    return BatchedArray{T, _unwrap_val(N)}(bc.f.(__unwrap_barray(bc.args)...))
+    X = bc.f.(__unwrap_barray(bc.args)...)
+    return BatchedArray{eltype(X), _unwrap_val(N)}(X)
 end
 
 @inline function Base.copyto!(dest::BatchedArray,
@@ -245,18 +246,6 @@ end
 @inline __unwrap_barray(args::Tuple) = map(__unwrap_barray, args)
 @inline __unwrap_barray(x::BatchedArray) = x.data
 @inline __unwrap_barray(x) = x
-
-@inline __extract_eltype(args::Tuple) = promote_type(map(__extract_eltype, args)...)
-@inline __extract_eltype(x::AbstractArray) = eltype(x)
-@inline __extract_eltype(x::Number) = typeof(x)
-# These appear in integer power operations
-for xType in (Base.RefValue{typeof(^)}, Base.RefValue{Val{N}} where {N})
-    @eval __extract_eltype(::$(xType)) = Bool
-end
-@inline function __extract_eltype(x)
-    throw(ArgumentError("Encountered $(x)::$(typeof(x)) in broadcast with BatchedArray. \
-                         This is currently unhandled. Please open an issue with a MWE!"))
-end
 
 @inline __extract_nbatches(args::Tuple) = Val(maximum(map(__extract_nbatches, args)))
 @inline __extract_nbatches(x::BatchedArray) = nbatches(x)
