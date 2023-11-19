@@ -15,7 +15,23 @@ function LinearAlgebra.mul!(C::BatchedVecOrMat, A::BatchedVecOrMat, B::BatchedVe
     return C
 end
 
+function LinearAlgebra.mul!(C::BatchedVector, A::AbstractMatrix, B::BatchedVector)
+    mul!(C.data, A, B.data)
+    return C
+end
+
+function LinearAlgebra.mul!(C::BatchedVector, A::AbstractMatrix, B::BatchedVector,
+        α::Number, β::Number)
+    mul!(C.data, A, B.data, α, β)
+    return C
+end
+
 Base.:*(A::BatchedVecOrMat, B::BatchedVecOrMat) = _batched_mul(A, B)
+
+function Base.:*(A::AbstractMatrix, B::BatchedVector)
+    X = A * B.data
+    return BatchedArray{eltype(X), nbatches(B)}(X)
+end
 
 ## -------------------
 ## Transpose / Adjoint
