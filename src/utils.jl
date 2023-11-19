@@ -59,7 +59,7 @@ function __is_strided(A::AbstractArray)
     M = parentmodule(typeof(A))
     if parent(A) === A # SparseMatrix, StaticArray, etc
         return false
-    elseif M === Base || M === Core || M ===LinearAlgebra
+    elseif M === Base || M === Core || M === LinearAlgebra
         # bad reshapes, etc, plus Diagonal, UpperTriangular, etc.
         return false
     else

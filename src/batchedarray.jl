@@ -1,10 +1,22 @@
-# Note that an N-dimensional BatchedArray is an N-1-dimensional array
-# This is done to trick a lot of SciML algorithms to think that a 3D Array is a matrix which
-# for the puposes of a BatchedArray is true.
-# NOTE: Creation of a BatchedArray will be type unstable. But we need to store the
-# batchsize in the type to allow construction via `undef` -- heavily used in Krylov.jl
-# This assumes that we can store the batched array in a contiguous fashion. Support for
-# non-contiguous structured arrays is planned but not very high priority.
+"""
+    BatchedArray{T, batchsize}(data)
+    BatchedArray{T}(data)
+    BatchedArray(data)
+
+Construct a BatchedArray from an AbstractArray. The batchsize is inferred from the last
+dimension of the array. If the provided array is 1D, then the batchsize is set to the length
+of the array.
+
+A `N` dimensional `BatchedArray` stores an `N + 1` dimensional abstract array internally.
+This means that if your code was designed to work for an `N` dimensional array, a
+`BatchedArray` pretends to be a `N` dimensional array.
+
+::: warning
+
+If `batchsize` isn't specified, construction of `BatchedArray` is type unstable.
+
+:::
+"""
 struct BatchedArray{T <: Number, N, D <: AbstractArray{T}, B} <: AbstractArray{T, N}
     data::D
 end
@@ -22,7 +34,7 @@ BatchedArray(data::AbstractArray) = BatchedArray{eltype(data)}(data)
 
 const BatchedVector = BatchedArray{T, 1} where {T}
 const BatchedMatrix = BatchedArray{T, 2} where {T}
-const BatchedVecOrMat = Union{BatchedVector, BatchedMatrix}
+const BatchedVecOrMat{T} = Union{BatchedVector{T}, BatchedMatrix{T}} where {T}
 
 nbatches(::Type{<:BatchedArray{T, N, D, B}}) where {T, N, D, B} = B
 nbatches(::BatchedArray{T, N, D, B}) where {T, N, D, B} = B

@@ -1,22 +1,28 @@
 # Most of this code is from https://github.com/FluxML/NNlib.jl/blob/master/src/batched/batchedmul.jl
 # Entry Point
-function _batched_mul(A::BatchedArray{T1}, B::BatchedArray{T2}) where {T1, T2}
-    @assert ndims(A) ≤ 2 && ndims(B) ≤ 2
-    # TODO (high-priority): Implement this!!!
-    error(1)
+function _batched_mul(A::BatchedMatrix, B::BatchedVector)
+    return vec(_batched_mul(A, reshape(B, :, 1)))
 end
 
 function _batched_mul(A::BatchedMatrix{T1}, B::BatchedMatrix{T2}) where {T1, T2}
-    if nbatches(A) != nbatches(B) && (nbatches(A) != 1 || nbatches(B) != 1)
+    if (nbatches(A) != nbatches(B)) && (nbatches(A) != 1 && nbatches(B) != 1)
         throw(DimensionMismatch("Batch dimensions must match or either must be 1."))
     end
     return __batched_mul(__storage_typejoin(A, B), A, B)
 end
 
-# TODO (high-priority): Implement this for non matrix Batched Matvec!!!
+function _batched_mul!(C::BatchedVector{T}, A::BatchedMatrix, B::BatchedVector,
+        α::Number=one(T), β::Number=zero(T)) where {T}
+    _batched_mul!(reshape(C, :, 1), A, reshape(B, :, 1), α, β)
+    return C
+end
 
 function _batched_mul!(C::BatchedMatrix{T}, A::BatchedMatrix, B::BatchedMatrix,
         α::Number=one(T), β::Number=zero(T)) where {T}
+    if (nbatches(A) != nbatches(B)) && (nbatches(A) != 1 && nbatches(B) != 1)
+        throw(DimensionMismatch("Batch dimensions must match or either must be 1."))
+    end
+    @assert nbatches(C) == max(nbatches(A), nbatches(B))
     __batched_mul!(__storage_typejoin(C, A, B), C, A, B, α, β)
     return C
 end

@@ -15,9 +15,7 @@ function LinearAlgebra.mul!(C::BatchedVecOrMat, A::BatchedVecOrMat, B::BatchedVe
     return C
 end
 
-function Base.:*(A::BatchedVecOrMat, B::BatchedVecOrMat)
-    return __batched_mul(__storage_typejoin(A, B), A, B)
-end
+Base.:*(A::BatchedVecOrMat, B::BatchedVecOrMat) = _batched_mul(A, B)
 
 ## -------------------
 ## Transpose / Adjoint
