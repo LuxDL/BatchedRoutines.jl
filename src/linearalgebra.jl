@@ -68,10 +68,14 @@ end
 ## Generic Version using a loop over the batch
 LinearAlgebra.qr(A::BatchedMatrix, args...; kwargs...) = qr!(copy(A), args...; kwargs...)
 
-function LinearAlgebra.qr!(A::BatchedMatrix, args...; kwargs...)
-    return GenericBatchedQR{eltype(A)}(map(batchview(A)) do Aᵢ
-            return qr!(Aᵢ, args...; kwargs...)
-        end, size(A)[1:(end - 1)])
+for pT in (:NoPivot, :ColumnNorm)
+    @eval begin
+        function LinearAlgebra.qr!(A::BatchedMatrix, pivot::$pT; kwargs...)
+            return GenericBatchedQR{eltype(A)}(map(batchview(A)) do Aᵢ
+                    return qr!(Aᵢ, pivot; kwargs...)
+                end, size(A)[1:(end - 1)])
+        end
+    end
 end
 
 function LinearAlgebra.qr!(A::BatchedVector, args...; kwargs...)
@@ -86,13 +90,17 @@ function LinearAlgebra.ldiv!(A::GenericBatchedQR, b::BatchedVector)
     return b
 end
 
-function LinearAlgebra.:\(A::GenericBatchedQR{T1}, b_::BatchedVector{T2}) where {T1, T2}
-    b = copy(b_)
+function LinearAlgebra.ldiv!(X::BatchedVector, A::GenericBatchedQR, b::BatchedVector)
     @assert nbatches(A) == nbatches(b)
-    X = similar(b, promote_type(T1, T2), size(A, 1))
     for i in 1:nbatches(A)
         ldiv!(batchview(X, i), batchview(A, i), batchview(b, i))
     end
+    return X
+end
+
+function LinearAlgebra.:\(A::GenericBatchedQR{T1}, b::BatchedVector{T2}) where {T1, T2}
+    X = similar(b, promote_type(T1, T2), size(A, 1))
+    ldiv!(X, A, copy(b))
     return X
 end
 
@@ -117,10 +125,14 @@ end
 ## Generic Version using a loop over the batch
 LinearAlgebra.lu(A::BatchedMatrix, args...; kwargs...) = lu!(copy(A), args...; kwargs...)
 
-function LinearAlgebra.lu!(A::BatchedMatrix, args...; kwargs...)
-    return GenericBatchedLU{eltype(A)}(map(batchview(A)) do Aᵢ
-            return lu!(Aᵢ, args...; kwargs...)
-        end, size(A)[1:(end - 1)])
+for pT in (:NoPivot, :RowMaximum, :RowNonZero)
+    @eval begin
+        function LinearAlgebra.lu!(A::BatchedMatrix, pivot::$pT; kwargs...)
+            return GenericBatchedLU{eltype(A)}(map(batchview(A)) do Aᵢ
+                    return lu!(Aᵢ, pivot; kwargs...)
+                end, size(A)[1:(end - 1)])
+        end
+    end
 end
 
 function LinearAlgebra.ldiv!(A::GenericBatchedLU, b::BatchedVector)
@@ -131,14 +143,17 @@ function LinearAlgebra.ldiv!(A::GenericBatchedLU, b::BatchedVector)
     return b
 end
 
-function LinearAlgebra.:\(A::GenericBatchedLU{T1}, b_::BatchedVector{T2}) where {T1, T2}
-    b = copy(b_)
+function LinearAlgebra.ldiv!(X::BatchedVector, A::GenericBatchedLU, b::BatchedVector)
     @assert nbatches(A) == nbatches(b)
-    X = similar(b, promote_type(T1, T2), size(A, 1))
     for i in 1:nbatches(A)
         ldiv!(batchview(X, i), batchview(A, i), batchview(b, i))
     end
     return X
+end
+
+function LinearAlgebra.:\(A::GenericBatchedLU{T1}, b::BatchedVector{T2}) where {T1, T2}
+    X = similar(b, promote_type(T1, T2), size(A, 1))
+    ldiv!(X, A, copy(b))
 end
 
 ## --------
