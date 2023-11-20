@@ -98,37 +98,93 @@ LinearAlgebra.lu(A::CuBatchedMatrix, args...; kwargs...) = lu!(copy(A), args...;
 
 function LinearAlgebra.lu!(A::CuBatchedMatrix, args...; check::Bool=true, kwargs...)
     pivot = length(args) == 0 ? RowMaximum() : first(pivot)
-    pivot_array, info_, factors = CUBLAS.getrf_strided_batched!(A.data, !(pivot isa NoPivot))
+    pivot_array, info_, factors = CUBLAS.getrf_strided_batched!(A.data,
+        !(pivot isa NoPivot))
     info = Array(info_)
     check && LinearAlgebra.checknonsingular.(info)
     return CuBatchedLU{eltype(A)}(factors, pivot_array, info, size(A)[1:(end - 1)])
 end
 
-# FIXME (medium-priority): Unfortunately there is no direct batched solver in CUSOLVER
 function LinearAlgebra.ldiv!(A::CuBatchedLU{T1}, b::CuBatchedVector{T2}) where {T1, T2}
     @assert nbatches(A) == nbatches(b)
-    for i in 1:nbatches(A)
-        Fᵢ, pᵢ, info = batchview(A, i)
-        ldiv!(LU(Fᵢ, pᵢ, info), batchview(b, i))
-    end
+    getrs_strided_batched!('N', A.factors, A.pivot_array, b.data)
     return b
 end
 
 function LinearAlgebra.:\(A::CuBatchedLU{T1}, b_::CuBatchedVector{T2}) where {T1, T2}
     b = copy(b_)
     @assert nbatches(A) == nbatches(b)
-    X = similar(b, promote_type(T1, T2), size(A, 1))
-    for i in 1:nbatches(A)
-        Fᵢ, pᵢ, info = batchview(A, i)
-        ldiv!(batchview(X, i), LU(Fᵢ, pᵢ, Int(info)), batchview(b, i))
-    end
-    return X
+    getrs_strided_batched!('N', A.factors, A.pivot_array, b.data)
+    return b
 end
 
 ## --------
 ## Direct \
 ## --------
 
-# See https://github.com/JuliaGPU/CUDA.jl/blob/dcd0970aea794acb81d8097485710b25986eac4f/lib/cusolver/linalg.jl#L54
+# Based on https://github.com/JuliaGPU/CUDA.jl/blob/dcd0970aea794acb81d8097485710b25986eac4f/lib/cusolver/linalg.jl#L54
+function LinearAlgebra.:\(A::CuBatchedMatrix{T1}, b::CuBatchedVector{T2}) where {T1, T2}
+    T = promote_type(T1, T2)
+    return (T != T1 ? T.(A) : A) \ (T != T2 ? T.(b) : b)
+end
+
+function LinearAlgebra.:\(A_::CuBatchedMatrix{T},
+        b_::CuBatchedVector{T}) where {T <: CuBlasFloat}
+    A = copy(A_.data)
+    b = copy(b_.data)
+    n, m = size(A)
+    if n < m
+        # Underdetermined System: Use LQ
+        error("Not yet implemented!")
+    elseif n == m
+        # LU with Pivoting
+        p, _, F = CUBLAS.getrf_strided_batched!(A, true)
+        X, _ = getrs_strided_batched!('N', F, p, b)
+    else
+        # Overdetermined System: Use QR
+        error("Not yet implemented!")
+    end
+
+    return BatchedArray{eltype(X), nbatches(A_)}(X)
+end
+
+## -------------------------------------
+## Low Level Wrappers (to be upstreamed)
+## -------------------------------------
+for (fname, elty) in ((:cublasDgetrsBatched, :Float64),
+    (:cublasSgetrsBatched, :Float32),
+    (:cublasZgetrsBatched, :ComplexF64),
+    (:cublasCgetrsBatched, :ComplexF32))
+    @eval begin
+        function getrs_batched!(trans::Char, n, nrhs, Aptrs::CuVector{CuPtr{$elty}}, lda, p,
+                Bptrs::CuVector{CuPtr{$elty}}, ldb)
+            batchSize = length(Aptrs)
+            info = Array{Cint}(undef, batchSize)
+            CUBLAS.$fname(CUBLAS.handle(), trans, n, nrhs, Aptrs, lda, p, Bptrs, ldb, info,
+                batchSize)
+            CUDA.unsafe_free!(Aptrs)
+            CUDA.unsafe_free!(Bptrs)
+
+            return info
+        end
+    end
+end
+
+function getrs_strided_batched!(trans::Char, F::DenseCuArray{<:Any, 3}, p::DenseCuMatrix,
+        B::Union{DenseCuArray{<:Any, 3}, DenseCuMatrix})
+    m, n = size(F, 1), size(F, 2)
+    if m != n
+        throw(DimensionMismatch("All matrices must be square!"))
+    end
+    lda = max(1, stride(F, 2))
+    ldb = max(1, stride(B, 2))
+    nrhs = ifelse(ndims(B) == 2, 1, size(B, 2))
+
+    Fptrs = CUBLAS.unsafe_strided_batch(F)
+    Bptrs = CUBLAS.unsafe_strided_batch(B)
+    info = getrs_batched!(trans, n, nrhs, Fptrs, lda, p, Bptrs, ldb)
+
+    return B, info
+end
 
 end

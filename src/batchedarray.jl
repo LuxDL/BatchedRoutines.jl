@@ -133,8 +133,12 @@ end
 # Pretty Printing
 # ---------------
 _batch_print(N) = ifelse(N == 1, "1 batch", "$(N) batches")
+function _batch_array_print(T, N)
+    return ifelse(N == 1, "BatchedVector{$T}",
+        ifelse(N == 2, "BatchedMatrix{$T}", "BatchedArray{$T, $N}"))
+end
 function _batched_summary(io, B::BatchedArray{T, N}, inds) where {T, N}
-    print(io, Base.dims2string(length.(inds)), " BatchedArray{$T, $N} with ")
+    print(io, Base.dims2string(length.(inds)), " $(_batch_array_print(T, N)) with ")
     return Base.printstyled(io, _batch_print(nbatches(B)); italic=true, underline=true)
 end
 function Base.array_summary(io::IO, B::BatchedArray, inds::Tuple{Vararg{Base.OneTo}})

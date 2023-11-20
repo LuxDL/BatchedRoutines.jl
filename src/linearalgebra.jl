@@ -26,7 +26,8 @@ function LinearAlgebra.mul!(C::BatchedVector, A::AbstractMatrix, B::BatchedVecto
     return C
 end
 
-Base.:*(A::BatchedVecOrMat, B::BatchedVecOrMat) = _batched_mul(A, B)
+Base.:*(A::BatchedMatrix, B::BatchedMatrix) = _batched_mul(A, B)
+Base.:*(A::BatchedMatrix, B::BatchedVector) = _batched_mul(A, B)
 
 function Base.:*(A::AbstractMatrix, B::BatchedVector)
     X = A * B.data
