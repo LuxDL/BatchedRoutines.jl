@@ -11,6 +11,14 @@ A `N` dimensional `BatchedArray` stores an `N + 1` dimensional abstract array in
 This means that if your code was designed to work for an `N` dimensional array, a
 `BatchedArray` pretends to be a `N` dimensional array.
 
+::: note
+
+This Array Type expects that the Batched Version of the underlying matrix can be stored in
+a contiguous fashion, which is not true for several structed matrices. We plan to support
+on a non-contiguous Batched Array in future releases!
+
+:::
+
 ::: warning
 
 If `batchsize` isn't specified, construction of `BatchedArray` is type unstable.
@@ -92,6 +100,10 @@ end
 
 function BatchedArray{T, N, D, B}(::UndefInitializer, dims...) where {T, N, D, B}
     return BatchedArray{T, B}(D(undef, (dims..., B)))
+end
+
+function Base.convert(::Type{BatchedArray}, A::AbstractArray)
+    return BatchedArray{eltype(A), nbatches(A)}(A)
 end
 
 # ---------
