@@ -47,33 +47,53 @@ end
 
 function LinearAlgebra.qr!(A::CuBatchedMatrix, ::NoPivot; kwargs...)
     τ, factors = CUBLAS.geqrf_batched!(batchview(A))
-    return CuBatchedQR{eltype(A)}(factors, τ, size(A)[1:(end - 1)])
+    return CuBatchedQR{eltype(A)}(factors, τ, size(A))
 end
 
-# FIXME (medium-priority): Unfortunately there is no direct batched solver in CUSOLVER
 function LinearAlgebra.ldiv!(A::CuBatchedQR, b::CuBatchedVector)
     @assert nbatches(A) == nbatches(b)
+    (; τ, factors) = A
+    n, m = size(A)
+    # TODO: Threading?
     for i in 1:nbatches(A)
-        Fᵢ, τᵢ = batchview(A, i)
-        ldiv!(QR(Fᵢ, τᵢ), batchview(b, i))
+        CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i),
+            batchview(b, i))
     end
+    vecX = [reshape(view(bᵢ, 1:m), :, 1) for bᵢ in batchview(b)]
+    if n != m
+        sqF = [copy(view(F_, 1:m, 1:m)) for F_ in batchview(factors)]
+    else
+        sqF = collect(batchview(factors))
+    end
+    CUBLAS.trsm_batched!('L', 'U', 'N', 'N', one(eltype(A)), sqF, vecX)
     return b
 end
 
 function LinearAlgebra.ldiv!(X::CuBatchedVector, A::CuBatchedQR, b::CuBatchedVector)
     @assert nbatches(A) == nbatches(b) == nbatches(X)
-    copyto!(X.data, b.data)
-    return ldiv!(A, X)
+    b = copy(b)
+    (; τ, factors) = A
+    n, m = size(A)
+    # TODO: Threading?
+    for i in 1:nbatches(A)
+        CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i),
+            batchview(b, i))
+    end
+    copyto!(X.data, view(b.data, 1:m, :))
+    vecX = [reshape(Xᵢ, :, 1) for Xᵢ in batchview(X)]
+    if n != m
+        sqF = [copy(view(F_, 1:m, 1:m)) for F_ in batchview(factors)]
+    else
+        sqF = collect(batchview(factors))
+    end
+    CUBLAS.trsm_batched!('L', 'U', 'N', 'N', one(eltype(X)), sqF, vecX)
+    return X
 end
 
-function LinearAlgebra.:\(A::CuBatchedQR{T1}, b_::CuBatchedVector{T2}) where {T1, T2}
+function LinearAlgebra.:\(A::CuBatchedQR{T1}, b::CuBatchedVector{T2}) where {T1, T2}
     @assert nbatches(A) == nbatches(b)
-    b = copy(b_)
-    X = similar(b, promote_type(T1, T2), size(A, 1))
-    for i in 1:nbatches(A)
-        Fᵢ, τᵢ = batchview(A, i)
-        ldiv!(batchview(X, i), QR(Fᵢ, τᵢ), batchview(b, i))
-    end
+    X = similar(b, promote_type(T1, T2), size(A, 2))
+    ldiv!(X, A, b)
     return X
 end
 
@@ -159,17 +179,11 @@ function LinearAlgebra.ldiv!(bX::CuBatchedVector{T}, bA::CuBatchedMatrix{T},
         getrs_strided_batched!('N', F, p, X)
     else
         # Overdetermined System: Use QR
-        batchview_A = [copy(Aᵢ) for Aᵢ in batchview(bA)]
-        τ, factors = CUBLAS.geqrf_batched!(batchview_A)
-        for i in 1:nbatches(bA)
-            CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i),
-                batchview(b, i))
-        end
+        # TODO: Benchmark and check if we should be using manual QR since the gels is for
+        #       small matrices
+        CUBLAS.gels_batched!('N', batchview(copy(bA)),
+            [reshape(b₍, :, 1) for b₍ in batchview(b)])
         copyto!(X, view(b, 1:m, :))
-        vec_X = [reshape(batchview(X, i), :, 1) for i in 1:nbatches(X)]
-        # Can we do this without copying the data? Data won't be contiguous in that case
-        sqF = [copy(view(F_, 1:m, 1:m)) for F_ in batchview(factors)]
-        CUBLAS.trsm_batched!('L', 'U', 'N', 'N', one(T), sqF, vec_X)
     end
     return X
 end
