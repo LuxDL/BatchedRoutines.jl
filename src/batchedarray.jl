@@ -58,6 +58,8 @@ function batchview(B::AbstractArray)
     return map(i -> view(B, ntuple(_ -> Colon(), ndims(B) - 1)..., i), 1:nbatches(B))
 end
 batchview(B::AbstractArray, idx::Int) = view(B, ntuple(_ -> Colon(), ndims(B) - 1)..., idx)
+batchview(B::AbstractVector{<:AbstractArray}) = B
+batchview(B::AbstractVector{<:AbstractArray}, idx::Int) = B[idx]
 
 Base.size(B::BatchedArray) = size(B.data)[1:(end - 1)]
 Base.size(B::BatchedArray, i::Integer) = size(B.data, i)

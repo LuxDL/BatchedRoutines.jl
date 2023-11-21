@@ -147,26 +147,36 @@ end
 
 function LinearAlgebra.ldiv!(bX::CuBatchedVector{T}, bA::CuBatchedMatrix{T},
         bb::CuBatchedVector{T}) where {T <: CuBlasFloat}
-    X, A, b = bX.data, copy(bA.data), copy(bb.data)
-    n, m = size(A)
+    X, b = bX.data, copy(bb.data)
+    n, m = size(bA)
     if n < m
         # Underdetermined System: Use LQ
         error("Not yet implemented!")
     elseif n == m
         # LU with Pivoting
-        p, _, F = CUBLAS.getrf_strided_batched!(A, true)
+        p, _, F = CUBLAS.getrf_strided_batched!(copy(bA.data), true)
         copyto!(X, b)
         getrs_strided_batched!('N', F, p, X)
     else
         # Overdetermined System: Use QR
-        error("Not yet implemented!")
+        batchview_A = [copy(Aᵢ) for Aᵢ in batchview(bA)]
+        τ, factors = CUBLAS.geqrf_batched!(batchview_A)
+        for i in 1:nbatches(bA)
+            CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i),
+                batchview(b, i))
+        end
+        copyto!(X, view(b, 1:m, :))
+        vec_X = [reshape(batchview(X, i), :, 1) for i in 1:nbatches(X)]
+        # Can we do this without copying the data? Data won't be contiguous in that case
+        sqF = [copy(view(F_, 1:m, 1:m)) for F_ in batchview(factors)]
+        CUBLAS.trsm_batched!('L', 'U', 'N', 'N', one(T), sqF, vec_X)
     end
     return X
 end
 
 function LinearAlgebra.:\(A::CuBatchedMatrix{T},
         b::CuBatchedVector{T}) where {T <: CuBlasFloat}
-    X = similar(A, T, size(A, 1))
+    X = similar(A, T, size(A, 2))
     ldiv!(X, A, b)
     return X
 end
