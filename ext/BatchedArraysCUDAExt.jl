@@ -41,18 +41,17 @@ end
 
 LinearAlgebra.qr(A::CuBatchedMatrix, args...; kwargs...) = qr!(copy(A), args...; kwargs...)
 
-function LinearAlgebra.qr!(A::CuBatchedMatrix, ::LinearAlgebra.ColumnNorm, args...;
-        kwargs...)
+function LinearAlgebra.qr!(A::CuBatchedMatrix, ::ColumnNorm, args...; kwargs...)
     throw("CUBLAS batched QR does not support column pivoting.")
 end
 
-function LinearAlgebra.qr!(A::CuBatchedMatrix, args...; kwargs...)
+function LinearAlgebra.qr!(A::CuBatchedMatrix, ::NoPivot; kwargs...)
     τ, factors = CUBLAS.geqrf_batched!(batchview(A))
     return CuBatchedQR{eltype(A)}(factors, τ, size(A)[1:(end - 1)])
 end
 
 # FIXME (medium-priority): Unfortunately there is no direct batched solver in CUSOLVER
-function LinearAlgebra.ldiv!(A::CuBatchedQR{T1}, b::CuBatchedVector{T2}) where {T1, T2}
+function LinearAlgebra.ldiv!(A::CuBatchedQR, b::CuBatchedVector)
     @assert nbatches(A) == nbatches(b)
     for i in 1:nbatches(A)
         Fᵢ, τᵢ = batchview(A, i)
@@ -61,9 +60,15 @@ function LinearAlgebra.ldiv!(A::CuBatchedQR{T1}, b::CuBatchedVector{T2}) where {
     return b
 end
 
+function LinearAlgebra.ldiv!(X::CuBatchedVector, A::CuBatchedQR, b::CuBatchedVector)
+    @assert nbatches(A) == nbatches(b) == nbatches(X)
+    copyto!(X.data, b.data)
+    return ldiv!(A, X)
+end
+
 function LinearAlgebra.:\(A::CuBatchedQR{T1}, b_::CuBatchedVector{T2}) where {T1, T2}
-    b = copy(b_)
     @assert nbatches(A) == nbatches(b)
+    b = copy(b_)
     X = similar(b, promote_type(T1, T2), size(A, 1))
     for i in 1:nbatches(A)
         Fᵢ, τᵢ = batchview(A, i)
@@ -96,24 +101,36 @@ end
 
 LinearAlgebra.lu(A::CuBatchedMatrix, args...; kwargs...) = lu!(copy(A), args...; kwargs...)
 
-function LinearAlgebra.lu!(A::CuBatchedMatrix, args...; check::Bool=true, kwargs...)
-    pivot = length(args) == 0 ? RowMaximum() : first(pivot)
-    pivot_array, info_, factors = CUBLAS.getrf_strided_batched!(A.data,
-        !(pivot isa NoPivot))
+for pT in (:RowMaximum, :RowNonZero, :NoPivot)
+    @eval begin
+        function LinearAlgebra.lu!(A::CuBatchedMatrix, pivot::$pT; kwargs...)
+            return lu!(A, !(pivot isa NoPivot); kwargs...)
+        end
+    end
+end
+
+function LinearAlgebra.lu!(A::CuBatchedMatrix, pivot::Bool=true; check::Bool=true,
+        kwargs...)
+    pivot_array, info_, factors = CUBLAS.getrf_strided_batched!(A.data, pivot)
     info = Array(info_)
     check && LinearAlgebra.checknonsingular.(info)
     return CuBatchedLU{eltype(A)}(factors, pivot_array, info, size(A)[1:(end - 1)])
 end
 
-function LinearAlgebra.ldiv!(A::CuBatchedLU{T1}, b::CuBatchedVector{T2}) where {T1, T2}
+function LinearAlgebra.ldiv!(A::CuBatchedLU, b::CuBatchedVector)
     @assert nbatches(A) == nbatches(b)
     getrs_strided_batched!('N', A.factors, A.pivot_array, b.data)
     return b
 end
 
-function LinearAlgebra.:\(A::CuBatchedLU{T1}, b_::CuBatchedVector{T2}) where {T1, T2}
-    b = copy(b_)
+function LinearAlgebra.ldiv!(X::CuBatchedVector, A::CuBatchedLU, b::CuBatchedVector)
+    copyto!(X.data, b.data)
+    return ldiv!(A, X)
+end
+
+function LinearAlgebra.:\(A::CuBatchedLU, b_::CuBatchedVector)
     @assert nbatches(A) == nbatches(b)
+    b = copy(b_)
     getrs_strided_batched!('N', A.factors, A.pivot_array, b.data)
     return b
 end
@@ -128,10 +145,9 @@ function LinearAlgebra.:\(A::CuBatchedMatrix{T1}, b::CuBatchedVector{T2}) where 
     return (T != T1 ? T.(A) : A) \ (T != T2 ? T.(b) : b)
 end
 
-function LinearAlgebra.:\(A_::CuBatchedMatrix{T},
-        b_::CuBatchedVector{T}) where {T <: CuBlasFloat}
-    A = copy(A_.data)
-    b = copy(b_.data)
+function LinearAlgebra.ldiv!(bX::CuBatchedVector{T}, bA::CuBatchedMatrix{T},
+        bb::CuBatchedVector{T}) where {T <: CuBlasFloat}
+    X, A, b = bX.data, copy(bA.data), copy(bb.data)
     n, m = size(A)
     if n < m
         # Underdetermined System: Use LQ
@@ -139,13 +155,20 @@ function LinearAlgebra.:\(A_::CuBatchedMatrix{T},
     elseif n == m
         # LU with Pivoting
         p, _, F = CUBLAS.getrf_strided_batched!(A, true)
-        X, _ = getrs_strided_batched!('N', F, p, b)
+        copyto!(X, b)
+        getrs_strided_batched!('N', F, p, X)
     else
         # Overdetermined System: Use QR
         error("Not yet implemented!")
     end
+    return X
+end
 
-    return BatchedArray{eltype(X), nbatches(A_)}(X)
+function LinearAlgebra.:\(A::CuBatchedMatrix{T},
+        b::CuBatchedVector{T}) where {T <: CuBlasFloat}
+    X = similar(A, T, size(A, 1))
+    ldiv!(X, A, b)
+    return X
 end
 
 ## -------------------------------------
