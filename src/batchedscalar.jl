@@ -19,9 +19,10 @@ batchview(x::Number, ::Integer) = x
 Base.eltype(::BatchedScalar{T}) where {T} = T
 Base.length(x::BatchedScalar) = nbatches(x)
 
-function Base.show(io::IO, x::BatchedScalar)
-    print(io, "BatchedScalar(", x.data, ") with $(_batch_print(nbatches(x)))")
-end
+Base.convert(::Type{<:Bool}, x::BatchedScalar) = all(Bool, batchview(x))
+Base.Bool(x::BatchedScalar) = convert(Bool, x)
+
+Base.show(io::IO, x::BatchedScalar) = print(io, "BatchedScalar(", x.data, ")")
 function Base.show(io::IO, m::MIME"text/plain", B::BatchedScalar)
     print(io, "BatchedScalar with $(_batch_print(nbatches(B)))")
     print(io, " storing ")
@@ -51,36 +52,37 @@ end
 ## -----------------
 ## Common Operations
 ## -----------------
-for op in (:+, :-, :*, :/, :^, :isless), T1 in (:BatchedScalar, :Number),
+for op in (:+, :-, :*, :/, :^, :isless, :<, :>, :(==), :≥, :≤, :isapprox, :|, :&),
+    T1 in (:BatchedScalar, :Number),
     T2 in (:BatchedScalar, :Number)
 
     T1 == :Number && T2 == :Number && continue
 
-    @eval function Base.$(op)(x::$T1, y::$T2)
-        res = $(op).(batchview(x), batchview(y))
+    @eval function Base.$(op)(x::$T1, y::$T2; kwargs...)
+        res = $(op).(batchview(x), batchview(y); kwargs...)
         return BatchedScalar{max(nbatches(x), nbatches(y))}(res)
     end
 end
 
+# Unary Operators
+for op in (:+, :-, :~)
+    @eval Base.$(op)(x::BatchedScalar) = BatchedScalar{nbatches(x)}($(op).(batchview(x)))
+end
+
 # Ambiguities
-function Base.:^(x::BatchedScalar, p::Integer)
-    return BatchedScalar{nbatches(x)}(x.data .^ p)
-end
+Base.:^(x::BatchedScalar, p::Integer) = BatchedScalar{nbatches(x)}(x.data .^ p)
 
-for op in (:<, :>, :(==), :≥, :≤), T1 in (:BatchedScalar, :Number),
-    T2 in (:BatchedScalar, :Number)
+for cType in (:Bool, :BatchedScalar), xType in (:Number, :BatchedScalar),
+    yType in (:Number, :BatchedScalar)
 
-    T1 == :Number && T2 == :Number && continue
+    cType == :Bool && xType == :Number && yType == :Number && continue
 
-    # TODO: Nonallocating version if possible
-    @eval function Base.$(op)(x::$T1, y::$T2)
-        return all($(op).(batchview(x), batchview(y)))
+    @eval begin
+        function Base.ifelse(c::$(cType), x::$(xType), y::$(yType))
+            res = ifelse.(batchview(c), batchview(x), batchview(y))
+            return BatchedScalar{max(nbatches(c), nbatches(x), nbatches(y))}(res)
+        end
     end
-end
-
-function Base.ifelse(c::BatchedScalar, x::BatchedScalar, y::BatchedScalar)
-    res = ifelse.(batchview(c), batchview(x), batchview(y))
-    return BatchedScalar{max(nbatches(c), nbatches(x), nbatches(y))}(res)
 end
 
 for op in (:any, :all)

@@ -73,7 +73,7 @@ end
 
 function Base.getindex(B::BatchedArray, args...)
     length(args) == ndims(B) + 1 && return getindex(B.data, args...)
-    return BatchedArray{eltype(B), nbatches(B)}(reshape(getindex(B.data, args..., :), 1, :))
+    return BatchedScalar{nbatches(B)}(getindex(B.data, args..., :))
 end
 # Happens when indexing with `diagind`
 function Base.getindex(B::BatchedArray, idx::StepRange)
@@ -212,27 +212,6 @@ function Base.show(io::IO, m::MIME"text/plain", B::BatchedArray)
     print(io, " with data ")
     show(io, m, B.data)
     return
-end
-
-# TODO: Make this a bit better, but currently atleast lets `@show` work
-function Base.show_vector(io::IO, v::BatchedVector, opn='[', cls=']')
-    prefix, implicit = Base.typeinfo_prefix(io, v)
-    print(io, prefix)
-    # directly or indirectly, the context now knows about eltype(v)
-    if !implicit
-        io = IOContext(io, :typeinfo => eltype(v))
-    end
-    limited = get(io, :limit, false)::Bool
-
-    if limited && length(v) > 20
-        axs1 = axes1(v)
-        f, l = first(axs1), last(axs1)
-        Base.show_delim_array(io, v.data, opn, ",", "", false, f, f + 9)
-        print(io, "  …  ")
-        Base.show_delim_array(io, v.data, "", ",", cls, false, l - 9, l)
-    else
-        Base.show_delim_array(io, v.data, opn, ",", cls, false)
-    end
 end
 
 # ---------

@@ -28,6 +28,11 @@ effectively takes your code written for an ND-Array and tries to generalize it t
 
 ## Common Problems
 
-* Some operations might lead to a stack overflow, this is because standard indexing into a
-  `BatchedArray` returns a `BatchedVector`. This is not un-intentional! If you encounter
-  this issue, open an issue, these are quite trivial to fix.
+* If you have a code where `if <x>; ...; end` block and `x` happens to be a `BatchedScalar`,
+  this will lead to an error. To generically support batching:
+  1. Avoid Conditionals
+  2. Write you code using `ifelse(x, ...)` instead of `if <x>; ...; else ...; end`.
+  3. If you are very confident that you know what you are doing, you can use `Bool(x)` to
+     convert a `BatchedScalar` to a `Bool`. This returns `true` if all the elements in the
+     batch are `true` and `false` otherwise. Note that doing this means the computation
+     relies on all the batches which might not be what you want.
