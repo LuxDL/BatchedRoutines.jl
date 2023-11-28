@@ -75,6 +75,14 @@ function Base.getindex(B::BatchedArray, args...)
     length(args) == ndims(B) + 1 && return getindex(B.data, args...)
     return BatchedArray{eltype(B), nbatches(B)}(reshape(getindex(B.data, args..., :), 1, :))
 end
+# Happens when indexing with `diagind`
+function Base.getindex(B::BatchedArray, idx::StepRange)
+    final_idxs = Vector{Int}(undef, length(idx) * nbatches(B))
+    for i in 1:nbatches(B)
+        final_idxs[(i - 1) * length(idx) + 1:i * length(idx)] = idx .+ (i - 1) * length(B)
+    end
+    return B.data[final_idxs]
+end
 
 function Base.setindex!(B::BatchedArray, v, args...)
     length(args) == ndims(B) + 1 && (setindex!(B.data, v, args...); return B)
@@ -122,6 +130,14 @@ end
 
 function Base.view(B::BatchedArray, args...)
     return BatchedArray{eltype(B), nbatches(B)}(view(B.data, args..., 1:nbatches(B)))
+end
+# TODO: Generalize beyond step-range to linear indexing
+function Base.view(B::BatchedArray, idx::StepRange)
+    final_idxs = Vector{Int}(undef, length(idx) * nbatches(B))
+    for i in 1:nbatches(B)
+        final_idxs[(i - 1) * length(idx) + 1:i * length(idx)] = idx .+ (i - 1) * length(B)
+    end
+    return view(B.data, final_idxs)
 end
 
 # Forward some of the common operations

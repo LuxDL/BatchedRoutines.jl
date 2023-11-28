@@ -87,6 +87,10 @@ Base.size(F::GenericBatchedFactorization) = size(first(F.fact))
 Base.size(F::GenericBatchedFactorization, i::Integer) = size(first(F.fact), i)
 Base.eltype(F::GenericBatchedFactorization) = eltype(first(F.fact))
 
+function LinearAlgebra.issuccess(fact::GenericBatchedFactorization{typeof(lu!)})
+    return all(issuccess, fact.fact)
+end
+
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::GenericBatchedFactorization)
     println(io, "GenericBatchedFactorization() with $(_batch_print(nbatches(F)))")
     Base.printstyled(io, "Factorization Function: "; color=:green)
