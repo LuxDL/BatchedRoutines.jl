@@ -21,7 +21,7 @@ For people familiar with `jax` and `functorch`, this is similar to a poor man's 
 effectively takes your code written for an ND-Array and tries to generalize it to
 (N+1)D-Arrays.
 
-> [*WARNING*]
+> [!WARNING]
 > This package is currently experimental and it is highly advisable not to directly depend
 > on it. Support for SciML applications is available only after loading this package
 > explicitly.

@@ -11,6 +11,7 @@ import PrecompileTools: @recompile_invalidations
 end
 
 include("batchedarray.jl")
+include("batchedscalar.jl")
 include("utils.jl")
 
 # Low-Level possibly direct BLAS/LAPACK code
@@ -19,6 +20,7 @@ include("lowlevel/batched_mul.jl")
 include("linearalgebra.jl")
 
 export BatchedArray, BatchedVector, BatchedMatrix, BatchedVecOrMat
+export BatchedScalar
 export nbatches, batchview
 
 end

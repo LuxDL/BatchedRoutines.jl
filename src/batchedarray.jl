@@ -79,7 +79,8 @@ end
 function Base.getindex(B::BatchedArray, idx::StepRange)
     final_idxs = Vector{Int}(undef, length(idx) * nbatches(B))
     for i in 1:nbatches(B)
-        final_idxs[(i - 1) * length(idx) + 1:i * length(idx)] = idx .+ (i - 1) * length(B)
+        final_idxs[((i - 1) * length(idx) + 1):(i * length(idx))] = idx .+
+                                                                    (i - 1) * length(B)
     end
     return B.data[final_idxs]
 end
@@ -89,11 +90,6 @@ function Base.setindex!(B::BatchedArray, v, args...)
     for Bᵢ in batchview(B)
         setindex!(Bᵢ, v, args...)
     end
-    return B
-end
-function Base.setindex!(B::BatchedArray, v::BatchedVector, args...)
-    Bᵢ = view(B.data, args..., 1:nbatches(B))
-    copyto!(Bᵢ, v.data)
     return B
 end
 
@@ -135,26 +131,15 @@ end
 function Base.view(B::BatchedArray, idx::StepRange)
     final_idxs = Vector{Int}(undef, length(idx) * nbatches(B))
     for i in 1:nbatches(B)
-        final_idxs[(i - 1) * length(idx) + 1:i * length(idx)] = idx .+ (i - 1) * length(B)
+        final_idxs[((i - 1) * length(idx) + 1):(i * length(idx))] = idx .+
+                                                                    (i - 1) * length(B)
     end
     return view(B.data, final_idxs)
-end
-
-# Forward some of the common operations
-for op in (:sign, :abs, :abs2)
-    @eval begin
-        @inline function Base.$(op)(A::BatchedVector)
-            y = $(op).(A.data)
-            return BatchedArray{eltype(y), nbatches(y)}(y)
-        end
-    end
 end
 
 function Base.clamp(A::BatchedVector, lo, hi)
     return BatchedArray{eltype(A), nbatches(A)}(clamp.(A.data, lo, hi))
 end
-
-Base.sign(A::BatchedVector) = BatchedArray{eltype(A), nbatches(A)}(sign.(A.data))
 
 function Base.map!(f::F, dest::BatchedArray, src::BatchedArray) where {F}
     for (destᵢ, srcᵢ) in zip(batchview(dest), batchview(src))
@@ -167,9 +152,16 @@ Base.iszero(B::BatchedArray) = iszero(B.data)
 # ---------
 # Reduction
 # ---------
-# Forward Reduction Operations to the internal array
-function Base.mapreduce(f::F, op::OP, B::BatchedArray; kwargs...) where {F, OP}
-    return mapreduce(f, op, B.data; kwargs...)
+# Forward Reduction Operations to the internal array?
+function Base.mapreduce(f::F, op::OP, B::BatchedArray; dims = Colon(),
+        kwargs...) where {F, OP}
+    dims_internal = dims === Colon() ? ntuple(identity, ndims(B)) : dims
+    y = mapreduce(f, op, B.data; dims=dims_internal, kwargs...)
+    if dims === Colon()
+        return BatchedScalar{nbatches(B)}(dropdims(y; dims=dims_internal))
+    else
+        return BatchedArray{eltype(y), nbatches(B)}(y)
+    end
 end
 
 # -------------
@@ -197,7 +189,11 @@ function _batch_array_print(T, N)
 end
 function _batched_summary(io, B::BatchedArray{T, N}, inds) where {T, N}
     print(io, Base.dims2string(length.(inds)), " $(_batch_array_print(T, N)) with ")
-    return Base.printstyled(io, _batch_print(nbatches(B)); italic=true, underline=true)
+    if VERSION ≥ v"1.10-"
+        return Base.printstyled(io, _batch_print(nbatches(B)); italic=true, underline=true)
+    else
+        return Base.printstyled(io, _batch_print(nbatches(B)); underline=true)
+    end
 end
 function Base.array_summary(io::IO, B::BatchedArray, inds::Tuple{Vararg{Base.OneTo}})
     _batched_summary(io, B, inds)

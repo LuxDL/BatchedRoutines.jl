@@ -38,18 +38,19 @@ function Base.:*(A::AbstractMatrix, B::BatchedVector)
     return BatchedArray{eltype(X), nbatches(B)}(X)
 end
 
+## -----------------
+## Common Operations
+## -----------------
+
 # TODO: Non-allocating version for some array types
 function LinearAlgebra.dot(A::BatchedVector, B::BatchedVector)
-    res = sum(A.data .* B.data; dims=1)
-    return BatchedArray{promote_type(eltype(A), eltype(B)), nbatches(A)}(res)
+    res = dropdims(sum(A.data .* B.data; dims=1); dims=1)
+    return BatchedScalar{nbatches(A)}(res)
 end
 
-## ------------------------------------
-## BatchedVector a.k.a Batch of Scalars
-## ------------------------------------
-
-for op in (:/, :*)
-    @eval Base.$(op)(A::BatchedVector, B::BatchedVector) = broadcast($op, A, B)
+function LinearAlgebra.norm(A::BatchedArray, p::Real=2)
+    pow = Base.Fix2(^, p)
+    return sum(pow, A) ^ (1/p)
 end
 
 ## -------------------
