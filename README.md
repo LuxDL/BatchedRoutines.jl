@@ -26,6 +26,20 @@ effectively takes your code written for an ND-Array and tries to generalize it t
 > on it. Support for SciML applications is available only after loading this package
 > explicitly.
 
+## Installation
+
+This package can be installed in Julia 1.9+ with:
+
+```julia
+julia> using Pkg; Pkg.add("BatchedArrays")
+```
+
+## Currently Supported SciML Solvers
+
+1. `LinearSolve.jl`
+2. `SimpleNonlinearSolve.jl`
+    * Except `SimpleTrustRegion`
+
 ## Common Problems
 
 * If you have a code where `if <x>; ...; end` block and `x` happens to be a `BatchedScalar`,
@@ -36,3 +50,13 @@ effectively takes your code written for an ND-Array and tries to generalize it t
      convert a `BatchedScalar` to a `Bool`. This returns `true` if all the elements in the
      batch are `true` and `false` otherwise. Note that doing this means the computation
      relies on all the batches which might not be what you want.
+
+## Design Choices
+
+* `N` Dimensional BatchedArray internally stores a `N + 1` Dimensional Array
+* Indexing into a `BatchedArray` creates a `BatchedScalar` if the length of the indices is
+  equal to the ndims of the BatchedArray, else it tries to directly index into the
+  underlying data
+* Conditional Operations on `BatchedScalar` with another `BatchedScalar`
+  creates a `BatchedScalar` with the same batch size. If one of the operands is a "true"
+  scalar, then it treat it as a reduction and `all(<op>, ...)` is computed.

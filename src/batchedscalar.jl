@@ -22,6 +22,12 @@ Base.length(x::BatchedScalar) = nbatches(x)
 Base.convert(::Type{<:Bool}, x::BatchedScalar) = all(Bool, batchview(x))
 Base.Bool(x::BatchedScalar) = convert(Bool, x)
 
+# I don't really like this
+Base.convert(::Type{T}, x::BatchedScalar) where {T <: Number} = T(mean(batchview(x)))
+for T in (:Float16, :Float32, :Float64)
+    @eval Base.$T(x::BatchedScalar) = ($T)(mean(batchview(x)))
+end
+
 Base.show(io::IO, x::BatchedScalar) = print(io, "BatchedScalar(", x.data, ")")
 function Base.show(io::IO, m::MIME"text/plain", B::BatchedScalar)
     print(io, "BatchedScalar with $(_batch_print(nbatches(B)))")
@@ -38,7 +44,7 @@ function BatchedScalar{B}(data::AbstractVector) where {B}
     return BatchedScalar{eltype(data), B, typeof(data)}(data)
 end
 
-function Base.fill(v::BatchedScalar, dims::Vararg{<:Union{<:Integer, <:AbstractUnitRange}})
+function Base.fill(v::BatchedScalar, dims::Vararg{Union{Integer, AbstractUnitRange}})
     data = repeat(reshape(v.data, ntuple(_ -> 1, length(dims))..., :); inner=(dims..., 1))
     return BatchedArray{eltype(data), nbatches(v)}(data)
 end
@@ -52,7 +58,9 @@ end
 ## -----------------
 ## Common Operations
 ## -----------------
-for op in (:+, :-, :*, :/, :^, :isless, :<, :>, :(==), :≥, :≤, :isapprox, :|, :&),
+## Batched Scalar with Batched Scalar preserves structure.
+## Batched Scalar with Number is a reduction operation for conditional operations.
+for op in (:+, :-, :*, :/, :^, :|, :&),
     T1 in (:BatchedScalar, :Number),
     T2 in (:BatchedScalar, :Number)
 
@@ -61,6 +69,19 @@ for op in (:+, :-, :*, :/, :^, :isless, :<, :>, :(==), :≥, :≤, :isapprox, :|
     @eval function Base.$(op)(x::$T1, y::$T2; kwargs...)
         res = $(op).(batchview(x), batchview(y); kwargs...)
         return BatchedScalar{max(nbatches(x), nbatches(y))}(res)
+    end
+end
+
+for op in (:<, :>, :(==), :≥, :≤, :isless, :isapprox)
+    @eval begin
+        function Base.$(op)(x::BatchedScalar, y::BatchedScalar)
+            res = $(op).(batchview(x), batchview(y))
+            return BatchedScalar{max(nbatches(x), nbatches(y))}(res)
+        end
+
+        Base.$(op)(x::BatchedScalar, y::Number) = all($(op).(batchview(x), y))
+
+        Base.$(op)(x::Number, y::BatchedScalar) = all($(op).(x, batchview(y)))
     end
 end
 
@@ -90,6 +111,10 @@ for op in (:any, :all)
         Base.$(op)(f::F, x::BatchedScalar) where {F} = $(op)(f, batchview(x))
         Base.$(op)(x::BatchedScalar) = $(op)(batchview(x))
     end
+end
+
+for op in (:iszero,)
+    @eval Base.$(op)(x::BatchedScalar) = $(op)(batchview(x))
 end
 
 for op in (:sqrt, :sign, :abs, :abs2)

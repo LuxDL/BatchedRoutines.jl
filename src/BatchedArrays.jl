@@ -3,7 +3,7 @@ module BatchedArrays
 import PrecompileTools: @recompile_invalidations
 
 @recompile_invalidations begin
-    using ArrayInterface, LinearAlgebra
+    using ArrayInterface, LinearAlgebra, Statistics
 
     import Adapt
     import ConcreteStructs: @concrete

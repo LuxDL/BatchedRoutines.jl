@@ -197,19 +197,19 @@ function _batched_summary(io, B::BatchedArray{T, N}, inds) where {T, N}
 end
 function Base.array_summary(io::IO, B::BatchedArray, inds::Tuple{Vararg{Base.OneTo}})
     _batched_summary(io, B, inds)
-    print(io, " with data ")
+    print(io, " storing ")
     return summary(io, B.data)
 end
 function Base.array_summary(io::IO, B::BatchedArray, inds)
     _batched_summary(io, B, inds)
-    print(io, " with data ")
+    print(io, " storing ")
     summary(io, B.data)
     return print(io, " with indices ", Base.inds2string(inds))
 end
 
 function Base.show(io::IO, m::MIME"text/plain", B::BatchedArray)
     _batched_summary(io, B, axes(B))
-    print(io, " with data ")
+    print(io, " storing ")
     show(io, m, B.data)
     return
 end
