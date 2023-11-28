@@ -2,11 +2,17 @@ module BatchedArraysForwardDiffExt
 
 using BatchedArrays, ForwardDiff
 import ForwardDiff: Dual,
-    Partials, extract_jacobian!, extract_jacobian_chunk!, partials, seed!
+    Partials, extract_jacobian!, extract_jacobian_chunk!, partials, seed!, value
 
 # For BatchedArrays there is a faster way to do gradient and jacobian. The duals for
 # multiple batches can be propagated together.
-# There is a potential correctness issue if there is an inter-batch operation
+# There is a potential correctness issue if there is an inter-batch operation -- but this
+# can only happen if someone is defining a direct dispatch on Batched Arrays
+
+function value(v::BatchedVector)
+    x = value.(v.data)
+    return BatchedArray{eltype(x), nbatches(v)}(x)
+end
 
 ## -------
 ## Seeding

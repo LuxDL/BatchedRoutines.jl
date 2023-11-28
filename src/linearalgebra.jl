@@ -4,15 +4,19 @@
 ## ---------------------
 ## For CPUs there is probably some advantage of threading when the batch dimension is large
 ## but for now we just use a loop
-function LinearAlgebra.mul!(C::BatchedVecOrMat, A::BatchedVecOrMat, B::BatchedVecOrMat)
-    _batched_mul!(C, A, B)
-    return C
-end
+for aType in (:BatchedVector, :BatchedMatrix)
+    @eval begin
+        function LinearAlgebra.mul!(C::$(aType), A::BatchedVecOrMat, B::$(aType))
+            _batched_mul!(C, A, B)
+            return C
+        end
 
-function LinearAlgebra.mul!(C::BatchedVecOrMat, A::BatchedVecOrMat, B::BatchedVecOrMat,
-        α::Number, β::Number)
-    _batched_mul!(C, A, B, α, β)
-    return C
+        function LinearAlgebra.mul!(C::$(aType), A::BatchedVecOrMat, B::$(aType),
+                α::Number, β::Number)
+            _batched_mul!(C, A, B, α, β)
+            return C
+        end
+    end
 end
 
 function LinearAlgebra.mul!(C::BatchedVector, A::AbstractMatrix, B::BatchedVector)
@@ -34,17 +38,33 @@ function Base.:*(A::AbstractMatrix, B::BatchedVector)
     return BatchedArray{eltype(X), nbatches(B)}(X)
 end
 
+# TODO: Non-allocating version for some array types
+function LinearAlgebra.dot(A::BatchedVector, B::BatchedVector)
+    res = sum(A.data .* B.data; dims=1)
+    return BatchedArray{promote_type(eltype(A), eltype(B)), nbatches(A)}(res)
+end
+
+## ------------------------------------
+## BatchedVector a.k.a Batch of Scalars
+## ------------------------------------
+
+for op in (:/, :*)
+    @eval Base.$(op)(A::BatchedVector, B::BatchedVector) = broadcast($op, A, B)
+end
+
 ## -------------------
 ## Transpose / Adjoint
 ## -------------------
 function Base.adjoint(A::BatchedMatrix{T}) where {T}
     T <: Real || error("`adjoint` for Complex valued Batched Matrices not implemented!")
-    return BatchedArray{eltype(A), nbatches(A)}(PermutedDimsArray(A.data, (2, 1, 3)))
+    return BatchedArray{T, nbatches(A)}(PermutedDimsArray(A.data, (2, 1, 3)))
 end
+Base.adjoint(A::BatchedVector) = adjoint(reshape(A, :, 1))
 
 function Base.transpose(A::BatchedMatrix{T}) where {T}
-    return BatchedArray{eltype(A), nbatches(A)}(PermutedDimsArray(A.data, (2, 1, 3)))
+    return BatchedArray{T, nbatches(A)}(PermutedDimsArray(A.data, (2, 1, 3)))
 end
+Base.transpose(A::BatchedVector) = transpose(reshape(A, :, 1))
 
 # --------------
 # Factorizations

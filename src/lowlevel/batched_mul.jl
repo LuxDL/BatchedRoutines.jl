@@ -1,8 +1,7 @@
 # Most of this code is from https://github.com/FluxML/NNlib.jl/blob/master/src/batched/batchedmul.jl
 # Entry Point
-function _batched_mul(A::BatchedMatrix, B::BatchedVector)
-    return vec(_batched_mul(A, reshape(B, :, 1)))
-end
+_batched_mul(A::BatchedMatrix, B::BatchedVector) = vec(_batched_mul(A, reshape(B, :, 1)))
+_batched_mul(A::BatchedVector, B::BatchedMatrix) = _batched_mul(reshape(A, :, 1), B)
 
 function _batched_mul(A::BatchedMatrix{T1}, B::BatchedMatrix{T2}) where {T1, T2}
     if (nbatches(A) != nbatches(B)) && (nbatches(A) != 1 && nbatches(B) != 1)
@@ -16,6 +15,11 @@ function _batched_mul!(C::BatchedVector{T}, A::BatchedMatrix, B::BatchedVector,
     _batched_mul!(reshape(C, :, 1), A, reshape(B, :, 1), α, β)
     return C
 end
+function _batched_mul!(C::BatchedMatrix{T}, A::BatchedVector, B::BatchedMatrix,
+        α::Number=one(T), β::Number=zero(T)) where {T}
+    _batched_mul!(C, reshape(A, :, 1), B, α, β)
+    return C
+end
 
 function _batched_mul!(C::BatchedMatrix{T}, A::BatchedMatrix, B::BatchedMatrix,
         α::Number=one(T), β::Number=zero(T)) where {T}
@@ -27,7 +31,7 @@ function _batched_mul!(C::BatchedMatrix{T}, A::BatchedMatrix, B::BatchedMatrix,
     return C
 end
 
-# Checks fo potentialr BLAS/LAPACK dispatch
+# Checks fo potential BLAS dispatch
 function __batched_mul(::Type, A::BatchedMatrix, B::BatchedMatrix)
     T = promote_type(eltype(A), eltype(B))
     C = similar(A, T, size(A, 1), size(B, 2))
@@ -65,7 +69,7 @@ function __batched_mul_try_gemm!(::Type{DT}, C::BatchedMatrix, A::BatchedMatrix,
     (α isa T && β isa T) || return __batched_mul_generic!(C, A, B, α, β)
 
     # If any of them are strided, we need to use the generic implementation
-    (__is_strided(A) || __is_strided(B) || __is_strided(C)) ||
+    (__is_strided(A) || __is_strided(B) || __is_strided(C)) &&
         return __batched_mul_generic!(C, A, B, α, β)
 
     A_data, B_data = A.data, B.data

@@ -75,6 +75,7 @@ function Base.getindex(B::BatchedArray, args...)
     length(args) == ndims(B) + 1 && return getindex(B.data, args...)
     return BatchedArray{eltype(B), nbatches(B)}(reshape(getindex(B.data, args..., :), 1, :))
 end
+
 function Base.setindex!(B::BatchedArray, v, args...)
     length(args) == ndims(B) + 1 && (setindex!(B.data, v, args...); return B)
     for Bᵢ in batchview(B)
@@ -82,12 +83,23 @@ function Base.setindex!(B::BatchedArray, v, args...)
     end
     return B
 end
+function Base.setindex!(B::BatchedArray, v::BatchedVector, args...)
+    Bᵢ = view(B.data, args..., 1:nbatches(B))
+    copyto!(Bᵢ, v.data)
+    return B
+end
+
+ArrayInterface.can_setindex(B::BatchedArray) = ArrayInterface.can_setindex(B.data)
 
 function Base.fill!(B::BatchedArray, args...)
     return BatchedArray{eltype(B), nbatches(B)}(fill!(B.data, args...))
 end
 
 Base.copy(B::BatchedArray) = BatchedArray{eltype(B), nbatches(B)}(copy(B.data))
+function Base.copyto!(B::BatchedArray, A::BatchedArray)
+    copyto!(B.data, A.data)
+    return B
+end
 
 Base.similar(B::BatchedArray) = BatchedArray{eltype(B), nbatches(B)}(similar(B.data))
 function Base.similar(B::BatchedArray, ::Type{T}) where {T}
@@ -107,6 +119,34 @@ end
 function Base.convert(::Type{BatchedArray}, A::AbstractArray)
     return BatchedArray{eltype(A), nbatches(A)}(A)
 end
+
+function Base.view(B::BatchedArray, args...)
+    return BatchedArray{eltype(B), nbatches(B)}(view(B.data, args..., 1:nbatches(B)))
+end
+
+# Forward some of the common operations
+for op in (:sign, :abs, :abs2)
+    @eval begin
+        @inline function Base.$(op)(A::BatchedVector)
+            y = $(op).(A.data)
+            return BatchedArray{eltype(y), nbatches(y)}(y)
+        end
+    end
+end
+
+function Base.clamp(A::BatchedVector, lo, hi)
+    return BatchedArray{eltype(A), nbatches(A)}(clamp.(A.data, lo, hi))
+end
+
+Base.sign(A::BatchedVector) = BatchedArray{eltype(A), nbatches(A)}(sign.(A.data))
+
+function Base.map!(f::F, dest::BatchedArray, src::BatchedArray) where {F}
+    for (destᵢ, srcᵢ) in zip(batchview(dest), batchview(src))
+        map!(f, destᵢ, srcᵢ)
+    end
+end
+
+Base.iszero(B::BatchedArray) = iszero(B.data)
 
 # ---------
 # Reduction
