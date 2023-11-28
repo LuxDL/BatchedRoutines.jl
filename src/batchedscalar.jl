@@ -67,7 +67,7 @@ function Base.:^(x::BatchedScalar, p::Integer)
     return BatchedScalar{nbatches(x)}(x.data .^ p)
 end
 
-for op in (:<, :>, :(==), :≥, :≤),  T1 in (:BatchedScalar, :Number),
+for op in (:<, :>, :(==), :≥, :≤), T1 in (:BatchedScalar, :Number),
     T2 in (:BatchedScalar, :Number)
 
     T1 == :Number && T2 == :Number && continue

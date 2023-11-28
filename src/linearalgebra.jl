@@ -50,7 +50,7 @@ end
 
 function LinearAlgebra.norm(A::BatchedArray, p::Real=2)
     pow = Base.Fix2(^, p)
-    return sum(pow, A) ^ (1/p)
+    return sum(pow, A)^(1 / p)
 end
 
 ## -------------------

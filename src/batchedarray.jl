@@ -153,7 +153,7 @@ Base.iszero(B::BatchedArray) = iszero(B.data)
 # Reduction
 # ---------
 # Forward Reduction Operations to the internal array?
-function Base.mapreduce(f::F, op::OP, B::BatchedArray; dims = Colon(),
+function Base.mapreduce(f::F, op::OP, B::BatchedArray; dims=Colon(),
         kwargs...) where {F, OP}
     dims_internal = dims === Colon() ? ntuple(identity, ndims(B)) : dims
     y = mapreduce(f, op, B.data; dims=dims_internal, kwargs...)
