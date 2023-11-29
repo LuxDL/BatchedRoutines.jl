@@ -37,8 +37,12 @@ julia> using Pkg; Pkg.add("BatchedArrays")
 ## Currently Supported SciML Solvers
 
 1. `LinearSolve.jl`
+    1. `LUFactorization`
+    2. `QRFactorization`
+    3. `CholeskyFactorization`
+    4. `DirectLDiv!`
 2. `SimpleNonlinearSolve.jl`
-    * Except `SimpleTrustRegion`
+    * All xcept `SimpleTrustRegion`
 
 ## Common Problems
 

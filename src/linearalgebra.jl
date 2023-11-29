@@ -119,6 +119,11 @@ for fact in (:qr, :lu, :cholesky)
                 fact = map(Aᵢ -> $(fact!)(Aᵢ, pivot; kwargs...), batchview(A))
                 return GenericBatchedFactorization($(fact!), fact)
             end
+
+            # Needed to prevent method ambiguities
+            function LinearAlgebra.$(fact)(A::BatchedMatrix, pivot::$pType; kwargs...)
+                return $(fact!)(copy(A), pivot; kwargs...)
+            end
         end
     end
 end
