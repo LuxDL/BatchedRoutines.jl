@@ -6,9 +6,12 @@ import PrecompileTools: @recompile_invalidations
     using ADTypes: AutoFiniteDiff, AutoForwardDiff, AutoSparseForwardDiff,
                    AutoSparsePolyesterForwardDiff, AutoPolyesterForwardDiff
     using ArrayInterface: ArrayInterface, parameterless_type
+    using ChainRulesCore: ChainRulesCore
     using FastClosures: @closure
     using LinearAlgebra: LinearAlgebra
 end
+
+const CRC = ChainRulesCore
 
 const AutoAllForwardDiff{CK} = Union{<:AutoForwardDiff{CK}, <:AutoSparseForwardDiff{CK},
     <:AutoSparsePolyesterForwardDiff{CK}, <:AutoPolyesterForwardDiff{CK}}

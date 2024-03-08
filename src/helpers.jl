@@ -2,3 +2,6 @@
     (CK === nothing || CK ≤ 0) && return :(batched_pickchunksize(u))
     return :($(CK))
 end
+
+Base.@assume_effects :total _assert_type(x) = _assert_type(typeof(x))
+Base.@assume_effects :total _assert_type(::Type) = true
