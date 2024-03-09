@@ -8,7 +8,7 @@ import PrecompileTools: @recompile_invalidations
     using ArrayInterface: ArrayInterface, parameterless_type
     using ChainRulesCore: ChainRulesCore
     using FastClosures: @closure
-    using LinearAlgebra: LinearAlgebra
+    using LinearAlgebra: BLAS, LinearAlgebra, mul!
 end
 
 const CRC = ChainRulesCore
@@ -16,10 +16,15 @@ const CRC = ChainRulesCore
 const AutoAllForwardDiff{CK} = Union{<:AutoForwardDiff{CK}, <:AutoSparseForwardDiff{CK},
     <:AutoSparsePolyesterForwardDiff{CK}, <:AutoPolyesterForwardDiff{CK}}
 
-include("extensions.jl")  # Functions that will be defined in extensions
-include("helpers.jl")
+const BatchedVector{T} = AbstractMatrix{T}
+const BatchedMatrix{T} = AbstractArray{T, 3}
 
-export batched_jacobian
+_is_extension_loaded(::Val) = false
+
+include("api.jl")
+include("helpers.jl")
+include("impl/batched_mul.jl")
+
 export AutoFiniteDiff, AutoForwardDiff
 
 end

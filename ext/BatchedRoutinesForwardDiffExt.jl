@@ -7,7 +7,7 @@ using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
 using FastClosures: @closure
 using ForwardDiff: ForwardDiff
 
-# extensions.jl
+# api.jl
 function BatchedRoutines.batched_pickchunksize(
         X::AbstractArray{T, N}, n::Int=ForwardDiff.DEFAULT_CHUNK_THRESHOLD) where {T, N}
     return batched_pickchunksize(N == 1 ? length(X) : prod(size(X)[1:(N - 1)]), n)

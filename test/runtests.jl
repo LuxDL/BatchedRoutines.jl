@@ -1,3 +1,3 @@
-using ReTestItems: retests
+using ReTestItems: ReTestItems
 
-runtests(@__DIR__)
+ReTestItems.runtests(@__DIR__)
