@@ -20,8 +20,10 @@ end
         ad::AutoFiniteDiff, f::F, x::AbstractMatrix) where {F}
     f! = @closure (y, x_) -> copyto!(y, f(x_))
     fx = f(x)
-    J = UniformBlockDiagonalMatrix(similar(x, promote_type(eltype(fx), eltype(x)), size(fx, 1), size(x, 1), size(x, 2)))
-    sparsecache = FiniteDiff.JacobianCache(x, fx, ad.fdjtype; colorvec=matrix_colors(J), sparsity=J)
+    J = UniformBlockDiagonalMatrix(similar(
+        x, promote_type(eltype(fx), eltype(x)), size(fx, 1), size(x, 1), size(x, 2)))
+    sparsecache = FiniteDiff.JacobianCache(
+        x, fx, ad.fdjtype; colorvec=matrix_colors(J), sparsity=J)
     FiniteDiff.finite_difference_jacobian!(J, f!, x, sparsecache)
     return J
 end
