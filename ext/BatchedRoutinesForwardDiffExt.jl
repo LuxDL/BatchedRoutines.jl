@@ -2,8 +2,8 @@ module BatchedRoutinesForwardDiffExt
 
 using ADTypes: AutoForwardDiff
 using ArrayInterface: parameterless_type
-using BatchedRoutines: BatchedRoutines, batched_jacobian, batched_mul,
-                       batched_pickchunksize, _assert_type
+using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalMatrix, batched_jacobian,
+                       batched_mul, batched_pickchunksize, _assert_type
 using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
 using FastClosures: @closure
 using ForwardDiff: ForwardDiff
@@ -29,21 +29,23 @@ end
 
     partials = map(
         𝒾 -> Partials(ntuple(𝒿 -> ifelse(𝒾 == 𝒿, oneunit(T), zero(T)), chunksize)),
-        1:length(idxs))
+        parameterless_type(u){Int}(collect(1:length(idxs))))
     u_part_duals = Dual.(u[idxs, :], partials)
 
     if length(idxs_prev) == 0
         u_part_prev = similar(u_part_duals, 0, B)
     else
         u_part_prev = Dual.(u[idxs_prev, :],
-            Partials.(map(𝒾 -> ntuple(_ -> zero(T), chunksize), 1:length(idxs_prev))))
+            Partials.(map(𝒾 -> ntuple(_ -> zero(T), chunksize), 
+                parameterless_type(u){Int}(collect(1:length(idxs_prev))))))
     end
 
     if length(idxs_next) == 0
         u_part_next = similar(u_part_duals, 0, B)
     else
         u_part_next = Dual.(u[idxs_next, :],
-            Partials.(map(𝒾 -> ntuple(_ -> zero(T), chunksize), 1:length(idxs_next))))
+            Partials.(map(𝒾 -> ntuple(_ -> zero(T), chunksize),
+                parameterless_type(u){Int}(collect(1:length(idxs_next))))))
     end
 
     u_duals = vcat(u_part_prev, u_part_duals, u_part_next)
@@ -122,23 +124,23 @@ end
 
 @inline function BatchedRoutines.batched_jacobian(
         ad::AutoForwardDiff, f::F, u::AbstractMatrix) where {F}
-    return last(__batched_value_and_jacobian(ad, f, u))
+    return UniformBlockDiagonalMatrix(last(__batched_value_and_jacobian(ad, f, u)))
 end
 
-## Reverse over Forward: Just construct Hessian for now
-function ChainRulesCore.rrule(::RuleConfig{>:HasReverseMode}, ::typeof(batched_jacobian),
-        ad::AutoForwardDiff, f::F, x::AbstractMatrix) where {F}
-    N, B = size(x)
-    J, H = __batched_value_and_jacobian(
-        ad, @closure(y->reshape(batched_jacobian(ad, f, y), :, B)), x)
+# ## Reverse over Forward: Just construct Hessian for now
+# function ChainRulesCore.rrule(::RuleConfig{>:HasReverseMode}, ::typeof(batched_jacobian),
+#         ad::AutoForwardDiff, f::F, x::AbstractMatrix) where {F}
+#     N, B = size(x)
+#     J, H = __batched_value_and_jacobian(
+#         ad, @closure(y->reshape(batched_jacobian(ad, f, y), :, B)), x)
 
-    function ∇batched_jacobian(Δ)
-        ∂x = reshape(batched_mul(reshape(Δ, 1, :, B), H), N, B)
-        return NoTangent(), NoTangent(), NoTangent(), ∂x
-    end
+#     function ∇batched_jacobian(Δ)
+#         ∂x = reshape(batched_mul(reshape(Δ, 1, :, B), H), N, B)
+#         return NoTangent(), NoTangent(), NoTangent(), ∂x
+#     end
 
-    return reshape(J, :, N, B), ∇batched_jacobian
-end
+#     return UniformBlockDiagonalMatrix(reshape(J, :, N, B)), ∇batched_jacobian
+# end
 
 # helpers.jl
 Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{<:ForwardDiff.Dual}})=false

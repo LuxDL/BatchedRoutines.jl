@@ -2,13 +2,6 @@ struct UniformBlockDiagonalMatrix{T, D <: AbstractArray{T, 3}} <: AbstractMatrix
     data::D
 end
 
-function Base.size(A::UniformBlockDiagonalMatrix)
-    return (size(A.data, 1) * size(A.data, 3), size(A.data, 2) * size(A.data, 3))
-end
-Base.size(A::UniformBlockDiagonalMatrix, i::Int) = (size(A.data, i) * size(A.data, 3))
-
-Base.parent(A::UniformBlockDiagonalMatrix) = A.data
-
 nbatches(A::UniformBlockDiagonalMatrix) = size(A.data, 3)
 batchview(A::UniformBlockDiagonalMatrix) = batchview(A.data)
 batchview(A::UniformBlockDiagonalMatrix, i::Int) = batchview(A.data, i)
@@ -28,6 +21,33 @@ function ArrayInterface.can_setindex(::Type{<:UniformBlockDiagonalMatrix{
         T, D}}) where {T, D}
     return ArrayInterface.can_setindex(D)
 end
+
+function ArrayInterface.matrix_colors(A::UniformBlockDiagonalMatrix)
+    return repeat(1:size(A.data, 2), size(A.data, 3))
+end
+
+function ArrayInterface.findstructralnz(A::UniformBlockDiagonalMatrix)
+    I, J, K = size(A.data)
+    L = I * J * K
+    i_idxs, j_idxs = Vector{Int}(undef, L), Vector{Int}(undef, L)
+
+    @inbounds for (idx, (i, j, k)) in enumerate(Iterators.product(1:I, 1:J, 1:K))
+        i_idxs[idx] = i + (k - 1) * I
+        j_idxs[idx] = j + (k - 1) * J
+    end
+
+    return i_idxs, j_idxs
+end
+
+ArrayInterface.has_sparsestruct(::Type{<:UniformBlockDiagonalMatrix}) = true
+
+# Βase
+function Base.size(A::UniformBlockDiagonalMatrix)
+    return (size(A.data, 1) * size(A.data, 3), size(A.data, 2) * size(A.data, 3))
+end
+Base.size(A::UniformBlockDiagonalMatrix, i::Int) = (size(A.data, i) * size(A.data, 3))
+
+Base.parent(A::UniformBlockDiagonalMatrix) = A.data
 
 Base.@propagate_inbounds function Base.getindex(
         A::UniformBlockDiagonalMatrix, i::Int, j::Int)
