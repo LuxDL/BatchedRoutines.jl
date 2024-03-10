@@ -217,3 +217,95 @@ function Base.:*(X::UniformBlockDiagonalMatrix, Y::UniformBlockDiagonalMatrix)
 end
 
 # LinearAlgebra
+abstract type AbstractBatchedMatrixFactorization end
+
+struct GenericBatchedFactorization{A, F} <: AbstractBatchedMatrixFactorization
+    alg::A
+    fact::Vector{F}
+
+    function GenericBatchedFactorization(alg::A, fact::Vector{F}) where {A, F}
+        return new{A, F}(alg, fact)
+    end
+end
+
+nbatches(F::GenericBatchedFactorization) = length(F.fact)
+batchview(F::GenericBatchedFactorization) = F.fact
+batchview(F::GenericBatchedFactorization, idx::Int) = F.fact[idx]
+Base.size(F::GenericBatchedFactorization) = size(first(F.fact)) .* length(F.fact)
+function Base.size(F::GenericBatchedFactorization, i::Integer)
+    return size(first(F.fact), i) * length(F.fact)
+end
+Base.eltype(F::GenericBatchedFactorization) = eltype(first(F.fact))
+
+LinearAlgebra.issuccess(fact::GenericBatchedFactorization) = all(issuccess, fact.fact)
+
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::GenericBatchedFactorization)
+    println(io, "GenericBatchedFactorization() with Batch Count: $(nbatches(F))")
+    Base.printstyled(io, "Factorization Function: "; color=:green)
+    show(io, mime, F.alg)
+    Base.printstyled(io, "\nPrototype Factorization: "; color=:green)
+    show(io, mime, first(F.fact))
+    return nothing
+end
+
+const PIVOT_TYPES = Dict(
+    :qr => (:NoPivot, :ColumnNorm), :lu => (:NoPivot, :RowMaximum, :RowNonZero),
+    :cholesky => (:NoPivot, :RowMaximum))
+
+for fact in (:qr, :lu, :cholesky)
+    fact! = Symbol("$(fact)!")
+    @eval begin
+        function LinearAlgebra.$(fact)(A::UniformBlockDiagonalMatrix, args...; kwargs...)
+            return LinearAlgebra.$(fact!)(copy(A), args...; kwargs...)
+        end
+    end
+
+    for pType in PIVOT_TYPES[fact]
+        @eval begin
+            function LinearAlgebra.$(fact!)(
+                    A::UniformBlockDiagonalMatrix, pivot::$pType; kwargs...)
+                fact = map(Aᵢ -> LinearAlgebra.$(fact!)(Aᵢ, pivot; kwargs...), batchview(A))
+                return GenericBatchedFactorization(LinearAlgebra.$(fact!), fact)
+            end
+
+            # Needed to prevent method ambiguities
+            function LinearAlgebra.$(fact)(
+                    A::UniformBlockDiagonalMatrix, pivot::$pType; kwargs...)
+                return $(fact!)(copy(A), pivot; kwargs...)
+            end
+        end
+    end
+end
+
+function LinearAlgebra.ldiv!(A::GenericBatchedFactorization, b::AbstractVector)
+    return LinearAlgebra.ldiv!(A, reshape(b, :, nbatches(A)))
+end
+
+function LinearAlgebra.ldiv!(A::GenericBatchedFactorization, b::AbstractMatrix)
+    @assert nbatches(A) == nbatches(b)
+    for i in 1:nbatches(A)
+        ldiv!(batchview(A, i), batchview(b, i))
+    end
+    return b
+end
+
+function LinearAlgebra.ldiv!(
+        X::AbstractVector, A::GenericBatchedFactorization, b::AbstractVector)
+    LinearAlgebra.ldiv!(reshape(X, :, nbatches(A)), A, reshape(b, :, nbatches(A)))
+    return X
+end
+
+function LinearAlgebra.ldiv!(
+        X::AbstractMatrix, A::GenericBatchedFactorization, b::AbstractMatrix)
+    @assert nbatches(A) == nbatches(b) == nbatches(X)
+    for i in 1:nbatches(A)
+        LinearAlgebra.ldiv!(batchview(X, i), batchview(A, i), batchview(b, i))
+    end
+    return X
+end
+
+function LinearAlgebra.:\(A::GenericBatchedFactorization, b::AbstractVector)
+    X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
+    LinearAlgebra.ldiv!(X, A, copy(b))
+    return X
+end

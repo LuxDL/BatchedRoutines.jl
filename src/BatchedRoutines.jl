@@ -10,7 +10,8 @@ import PrecompileTools: @recompile_invalidations
     using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
     using ConcreteStructs: @concrete
     using FastClosures: @closure
-    using LinearAlgebra: BLAS, LinearAlgebra, mul!
+    using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
+                         mul!
 end
 
 const CRC = ChainRulesCore
