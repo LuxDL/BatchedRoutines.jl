@@ -10,6 +10,7 @@ import PrecompileTools: @recompile_invalidations
     using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
     using ConcreteStructs: @concrete
     using FastClosures: @closure
+    using FillArrays: Fill
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!
 end
@@ -30,11 +31,15 @@ include("matrix.jl")
 include("chainrules.jl")
 
 include("impl/batched_mul.jl")
+include("impl/batched_gmres.jl")
 
 export AutoFiniteDiff, AutoForwardDiff
 export batched_adjoint, batched_jacobian, batched_pickchunksize, batched_mul,
        batched_transpose
 export batchview, nbatches
 export UniformBlockDiagonalMatrix
+
+# TODO: Ship a custom GMRES routine & if needed some of the other complex nonlinear solve
+#       routines
 
 end

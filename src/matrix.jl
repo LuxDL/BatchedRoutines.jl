@@ -191,9 +191,14 @@ end
     I, J, K = __standardize_axes(new_axes)
     @assert I * K == size(x, 1) && J * K == size(x, 2)
     return mapfoldl((x, y) -> cat(x, y; dims=Val(3)), 1:K;
-        init=parameterless_type(x){T, 3}(undef, I, J, 0)) do k
+        init=_init_array_prototype(x, I, J, 0)) do k
         return view(x, ((k - 1) * I + 1):(k * I), ((k - 1) * J + 1):(k * J))
     end
+end
+@inline function __standardize_broadcast_args(::Val{2}, new_axes, x::Fill{T, 2}) where {T}
+    I, J, K = __standardize_axes(new_axes)
+    @assert I * K == size(x, 1) && J * K == size(x, 2)
+    return Fill(x.value, I, J, K)
 end
 @inline __standardize_broadcast_args(::Val, _, x) = x
 
@@ -216,8 +221,41 @@ function Base.:*(X::UniformBlockDiagonalMatrix, Y::UniformBlockDiagonalMatrix)
     return UniformBlockDiagonalMatrix(batched_mul(X.data, Y.data))
 end
 
+function Base.:*(X::UniformBlockDiagonalMatrix, Y::AbstractVector)
+    return (X * reshape(Y, :, 1, nbatches(X))).data |> vec
+end
+
+function Base.:*(X::UniformBlockDiagonalMatrix, Y::AbstractMatrix)
+    return X * reshape(Y, :, 1, nbatches(Y))
+end
+
+function Base.:*(X::UniformBlockDiagonalMatrix, Y::AbstractArray{T, 3}) where {T}
+    return UniformBlockDiagonalMatrix(batched_mul(X.data, Y))
+end
+
+function Base.:*(X::AbstractArray{T, 3}, Y::UniformBlockDiagonalMatrix) where {T}
+    return UniformBlockDiagonalMatrix(batched_mul(X, Y.data))
+end
+
 # LinearAlgebra
 abstract type AbstractBatchedMatrixFactorization end
+
+
+function LinearAlgebra.ldiv!(A::AbstractBatchedMatrixFactorization, b::AbstractVector)
+    return LinearAlgebra.ldiv!(A, reshape(b, :, nbatches(A)))
+end
+
+function LinearAlgebra.ldiv!(
+        X::AbstractVector, A::AbstractBatchedMatrixFactorization, b::AbstractVector)
+    LinearAlgebra.ldiv!(reshape(X, :, nbatches(A)), A, reshape(b, :, nbatches(A)))
+    return X
+end
+
+function LinearAlgebra.:\(A::AbstractBatchedMatrixFactorization, b::AbstractVector)
+    X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
+    LinearAlgebra.ldiv!(X, A, b)
+    return X
+end
 
 struct GenericBatchedFactorization{A, F} <: AbstractBatchedMatrixFactorization
     alg::A
@@ -271,14 +309,10 @@ for fact in (:qr, :lu, :cholesky)
             # Needed to prevent method ambiguities
             function LinearAlgebra.$(fact)(
                     A::UniformBlockDiagonalMatrix, pivot::$pType; kwargs...)
-                return $(fact!)(copy(A), pivot; kwargs...)
+                return LinearAlgebra.$(fact!)(copy(A), pivot; kwargs...)
             end
         end
     end
-end
-
-function LinearAlgebra.ldiv!(A::GenericBatchedFactorization, b::AbstractVector)
-    return LinearAlgebra.ldiv!(A, reshape(b, :, nbatches(A)))
 end
 
 function LinearAlgebra.ldiv!(A::GenericBatchedFactorization, b::AbstractMatrix)
@@ -290,12 +324,6 @@ function LinearAlgebra.ldiv!(A::GenericBatchedFactorization, b::AbstractMatrix)
 end
 
 function LinearAlgebra.ldiv!(
-        X::AbstractVector, A::GenericBatchedFactorization, b::AbstractVector)
-    LinearAlgebra.ldiv!(reshape(X, :, nbatches(A)), A, reshape(b, :, nbatches(A)))
-    return X
-end
-
-function LinearAlgebra.ldiv!(
         X::AbstractMatrix, A::GenericBatchedFactorization, b::AbstractMatrix)
     @assert nbatches(A) == nbatches(b) == nbatches(X)
     for i in 1:nbatches(A)
@@ -304,8 +332,14 @@ function LinearAlgebra.ldiv!(
     return X
 end
 
-function LinearAlgebra.:\(A::GenericBatchedFactorization, b::AbstractVector)
-    X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
-    LinearAlgebra.ldiv!(X, A, copy(b))
-    return X
+function LinearAlgebra.mul!(
+        C::AbstractVector, A::UniformBlockDiagonalMatrix, B::AbstractVector)
+    LinearAlgebra.mul!(reshape(C, :, 1, nbatches(A)), A, reshape(B, :, 1, nbatches(A)))
+    return C
+end
+
+function LinearAlgebra.mul!(C::AbstractArray{T1, 3}, A::UniformBlockDiagonalMatrix,
+        B::AbstractArray{T2, 3}) where {T1, T2}
+    batched_mul!(C, A.data, B)
+    return C
 end

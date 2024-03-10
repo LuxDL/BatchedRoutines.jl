@@ -128,6 +128,8 @@ end
     return C
 end
 
+# TODO: Add a LoopVectorization + Tullio version
+
 @inline function __batched_gemm_cpu!(transA::AbstractChar, transB::AbstractChar, α::T,
         A::BatchedMatrix{T}, B::BatchedMatrix{T}, β::T,
         C::BatchedMatrix{T}) where {T <: LinearAlgebra.BlasFloat}
