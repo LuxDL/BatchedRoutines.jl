@@ -7,6 +7,12 @@ where the last dimension is the batch size.
 """
 function batched_jacobian end
 
+@inline function batched_jacobian(ad, f::F, u::AbstractArray) where {F}
+    B = size(u, ndims(u))
+    f_mat = @closure x -> reshape(f(reshape(x, size(u))), :, B)
+    return batched_jacobian(ad, f_mat, reshape(u, :, B))
+end
+
 """
     batched_pickchunksize(X::AbstractArray, n::Int)
     batched_pickchunksize(N::Int, n::Int)
@@ -40,7 +46,7 @@ batches is returned.
 """
 batchview(A::AbstractArray, idx::Int) = selectdim(A, ndims(A), idx)
 function batchview(A::AbstractVector, idx::Int)
-    idx ≥ 2 && throw(BoundsError(batchview(A), idx))
+    return idx ≥ 2 && throw(BoundsError(batchview(A), idx))
 end
 batchview(A::AbstractArray) = eachslice(A; dims=ndims(A))
 batchview(A::AbstractVector) = (A,)

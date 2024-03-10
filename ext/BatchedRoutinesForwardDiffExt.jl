@@ -2,7 +2,8 @@ module BatchedRoutinesForwardDiffExt
 
 using ADTypes: AutoForwardDiff
 using ArrayInterface: parameterless_type
-using BatchedRoutines: BatchedRoutines, batched_mul, batched_pickchunksize, _assert_type
+using BatchedRoutines: BatchedRoutines, batched_jacobian, batched_mul,
+                       batched_pickchunksize, _assert_type
 using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
 using FastClosures: @closure
 using ForwardDiff: ForwardDiff
@@ -108,23 +109,19 @@ end
 end
 
 ## Exposed API
-function BatchedRoutines.batched_jacobian(
+@inline function BatchedRoutines.batched_jacobian(
         ad::AutoForwardDiff, f::F, u::AbstractVector{T}) where {F, T}
     tag = ad.tag === nothing ? ForwardDiff.Tag{F, eltype(u)}() : ad.tag
     cfg = ForwardDiff.JacobianConfig(
         f, u, ForwardDiff.Chunk{batched_pickchunksize(u)}(), tag)
     J = ForwardDiff.jacobian(f, u, cfg)
-    (_assert_type(u) && Base.issingletontype(F)) && return J::parameterless_type(u){T, 2}
+    (_assert_type(f) && _assert_type(u) && Base.issingletontype(F)) &&
+        return J::parameterless_type(u){T, 2}
     return J
 end
 
-function batched_jacobian(ad::AutoForwardDiff, f::F, u::AbstractArray) where {F}
-    B = size(u, ndims(u))
-    f_mat = @closure x -> reshape(f(reshape(x, size(u))), :, B)
-    return batched_jacobian(ad, f_mat, reshape(u, :, B))
-end
-
-function batched_jacobian(ad::AutoForwardDiff, f::F, u::AbstractMatrix) where {F}
+@inline function BatchedRoutines.batched_jacobian(
+        ad::AutoForwardDiff, f::F, u::AbstractMatrix) where {F}
     return last(__batched_value_and_jacobian(ad, f, u))
 end
 
@@ -133,7 +130,7 @@ function ChainRulesCore.rrule(::RuleConfig{>:HasReverseMode}, ::typeof(batched_j
         ad::AutoForwardDiff, f::F, x::AbstractMatrix) where {F}
     N, B = size(x)
     J, H = __batched_value_and_jacobian(
-        ad, @closure(y -> reshape(batched_jacobian(ad, f, y), :, B)), x)
+        ad, @closure(y->reshape(batched_jacobian(ad, f, y), :, B)), x)
 
     function ∇batched_jacobian(Δ)
         ∂x = reshape(batched_mul(reshape(Δ, 1, :, B), H), N, B)
