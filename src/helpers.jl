@@ -63,7 +63,6 @@ a `view` of such a container will return `false`, even in cases where the same `
 _is_strided(::StridedArray) = true
 _is_strided(A) = false
 function _is_strided(A::AbstractArray)
-    @show 11
     M = parentmodule(typeof(A))
     if parent(A) === A # SparseMatrix, StaticArray, etc
         return false

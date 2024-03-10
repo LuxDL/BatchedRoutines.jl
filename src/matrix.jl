@@ -2,9 +2,29 @@ struct UniformBlockDiagonalMatrix{T, D <: AbstractArray{T, 3}} <: AbstractMatrix
     data::D
 end
 
+function UniformBlockDiagonalMatrix(X::AbstractMatrix)
+    return UniformBlockDiagonalMatrix(reshape(X, size(X, 1), size(X, 2), 1))
+end
+
 nbatches(A::UniformBlockDiagonalMatrix) = size(A.data, 3)
 batchview(A::UniformBlockDiagonalMatrix) = batchview(A.data)
 batchview(A::UniformBlockDiagonalMatrix, i::Int) = batchview(A.data, i)
+
+function batched_mul(A::UniformBlockDiagonalMatrix, B::UniformBlockDiagonalMatrix)
+    return UniformBlockDiagonalMatrix(batched_mul(A.data, B.data))
+end
+
+function batched_transpose(X::UniformBlockDiagonalMatrix)
+    return UniformBlockDiagonalMatrix(batched_transpose(X.data))
+end
+
+Base.transpose(A::UniformBlockDiagonalMatrix) = batched_transpose(A)
+
+function batched_adjoint(X::UniformBlockDiagonalMatrix)
+    return UniformBlockDiagonalMatrix(batched_adjoint(X.data))
+end
+
+Base.adjoint(A::UniformBlockDiagonalMatrix) = batched_adjoint(A)
 
 # Adapt
 function Adapt.adapt_structure(to, x::UniformBlockDiagonalMatrix)
@@ -184,4 +204,16 @@ end
     return axes.stop
 end
 
-# TODO: Commoin LinearAlgebra operations
+# Common Math Operations
+function Base.mapreduce(
+        f::F, op::OP, A::UniformBlockDiagonalMatrix; dims=Colon(), kwargs...) where {F, OP}
+    res = mapreduce(f, op, A.data; dims, kwargs...)
+    dims isa Colon && return res
+    return UniformBlockDiagonalMatrix(res)
+end
+
+function Base.:*(X::UniformBlockDiagonalMatrix, Y::UniformBlockDiagonalMatrix)
+    return UniformBlockDiagonalMatrix(batched_mul(X.data, Y.data))
+end
+
+# LinearAlgebra

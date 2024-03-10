@@ -1,9 +1,8 @@
 """
     batched_jacobian(ad, f::F, x) where {F}
 
-Use the backend `ad` to compute the Jacobian of `f` at `x` in batched mode. If `x` is a
-vector then this behaves like usual jacobian and returns a matrix, else we return a 3D array
-where the last dimension is the batch size.
+Use the backend `ad` to compute the Jacobian of `f` at `x` in batched mode. Returns a
+[`UniformBlockDiagonalMatrix`](@ref) as the Jacobian.
 """
 function batched_jacobian end
 
@@ -24,9 +23,26 @@ function batched_pickchunksize end
 """
     batched_mul(A, B)
 
-TODO: Needs Documentation
+TODO: Needs Documentation (take from NNlib.jl)
 """
 batched_mul(A, B) = _batched_mul(A, B)
+
+"""
+    batched_transpose(X::AbstractArray{T, 3}) where {T}
+
+Transpose the first two dimensions of `X`.
+"""
+batched_transpose(X::BatchedMatrix) = PermutedDimsArray(X, (2, 1, 3))
+
+"""
+    batched_adjoint(X::AbstractArray{T, 3}) where {T}
+
+Adjoint the first two dimensions of `X`.
+"""
+batched_adjoint(X::BatchedMatrix{<:Real}) = batched_transpose(X)
+function batched_adjoint(X::BatchedMatrix)
+    return mapfoldl(adjoint, (x, y) -> cat(x, y; dims=Val(3)), batchview(X))
+end
 
 """
     nbatches(A::AbstractArray)

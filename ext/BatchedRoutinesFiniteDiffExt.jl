@@ -12,8 +12,8 @@ using FiniteDiff: FiniteDiff
         ad::AutoFiniteDiff, f::F, x::AbstractVector{T}) where {F, T}
     J = FiniteDiff.finite_difference_jacobian(f, x, ad.fdjtype)
     (_assert_type(f) && _assert_type(x) && Base.issingletontype(F)) &&
-        return J::parameterless_type(x){T, 2}
-    return J
+        (return UniformBlockDiagonalMatrix(J::parameterless_type(x){T, 2}))
+    return UniformBlockDiagonalMatrix(J)
 end
 
 @inline function BatchedRoutines.batched_jacobian(

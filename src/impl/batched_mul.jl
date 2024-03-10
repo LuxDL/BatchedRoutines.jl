@@ -77,11 +77,11 @@ function __batched_mul_try_gemm!(
         stride(parent(A), 1) == 1 || return batched_mul_generic!(C, A, B, α, β)
         parent(A), 'C'
     elseif stride(A, 2) == 1 && size(A, 1) > 1
-        transpose(A), 'T'
+        batched_transpose(A), 'T'
     elseif stride(A, 1) == 1
         A, 'N'
     elseif stride(A, 2) == 1
-        transpose(A), 'T'
+        batched_transpose(A), 'T'
     else
         return __batched_mul_generic!(C, A, B, α, β)
     end
@@ -90,11 +90,11 @@ function __batched_mul_try_gemm!(
         stride(parent(B), 1) == 1 || return batched_mul_generic!(C, A, B, α, β)
         parent(B), 'C'
     elseif stride(B, 2) == 1 && size(B, 1) > 1
-        transpose(B), 'T'
+        batched_transpose(B), 'T'
     elseif stride(B, 1) == 1
         B, 'N'
     elseif stride(B, 2) == 1
-        transpose(B), 'T'
+        batched_transpose(B), 'T'
     else
         return __batched_mul_generic!(C, A, B, α, β)
     end
@@ -119,7 +119,6 @@ end
 # Core Implementation
 @inline function __batched_mul_generic!(
         C::BatchedMatrix, A::BatchedMatrix, B::BatchedMatrix, α, β)
-    @show 11
     for i in 1:nbatches(C)
         Cᵢ = batchview(C, i)
         Aᵢ = batchview(A, min(i, nbatches(A)))
