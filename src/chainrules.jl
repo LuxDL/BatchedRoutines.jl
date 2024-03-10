@@ -1,4 +1,4 @@
-function __batched_value_and_jacobian(ad, f::F, x::AbstractMatrix) where {F}
+function __batched_value_and_jacobian(ad, f::F, x) where {F}
     J = batched_jacobian(ad, f, x)
     return f(x), J
 end
@@ -10,8 +10,30 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x::AbstractMatrix) wher
         ad, @closure(y->reshape(batched_jacobian(ad, f, y).data, :, B)), x)
 
     function ∇batched_jacobian(Δ)
-        ∂x = reshape(batched_mul(Δ, H).data, :, nbatches(Δ))
+        ∂x = reshape(
+            batched_mul(reshape(Δ.data, 1, :, nbatches(Δ)), H.data), :, nbatches(Δ))
         return NoTangent(), NoTangent(), NoTangent(), ∂x
+    end
+
+    return UniformBlockDiagonalMatrix(reshape(J, :, N, B)), ∇batched_jacobian
+end
+
+function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
+    N, B = size(x)
+    J, H = __batched_value_and_jacobian(
+        ad, @closure(y->reshape(batched_jacobian(ad, f, y, p).data, :, B)), x)
+
+    p_size = size(p)
+    _, Jₚ_ = __batched_value_and_jacobian(
+        ad, @closure(p->reshape(batched_jacobian(ad, f, x, reshape(p, p_size)).data, :, B)),
+        vec(p))
+    Jₚ = dropdims(Jₚ_.data; dims=3)
+
+    function ∇batched_jacobian(Δ)
+        ∂x = reshape(
+            batched_mul(reshape(Δ.data, 1, :, nbatches(Δ)), H.data), :, nbatches(Δ))
+        ∂p = reshape(reshape(Δ.data, 1, :) * Jₚ, p_size)
+        return NoTangent(), NoTangent(), NoTangent(), ∂x, ∂p
     end
 
     return UniformBlockDiagonalMatrix(reshape(J, :, N, B)), ∇batched_jacobian

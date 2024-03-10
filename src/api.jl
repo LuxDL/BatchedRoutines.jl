@@ -1,5 +1,6 @@
 """
     batched_jacobian(ad, f::F, x) where {F}
+    batched_jacobian(ad, f::F, x, p) where {F}
 
 Use the backend `ad` to compute the Jacobian of `f` at `x` in batched mode. Returns a
 [`UniformBlockDiagonalMatrix`](@ref) as the Jacobian.
@@ -11,6 +12,18 @@ function batched_jacobian end
     f_mat = @closure x -> reshape(f(reshape(x, size(u))), :, B)
     return batched_jacobian(ad, f_mat, reshape(u, :, B))
 end
+
+@inline batched_jacobian(ad, f::F, u, p) where {F} = batched_jacobian(
+    ad, Base.Fix2(f, p), u)
+
+"""
+    batched_gradient(ad, f::F, x) where {F}
+
+Use the backend `ad` to compute the gradient of `f` at `x` in batched mode. Note that for
+reverse mode AD we just call the internal `gradient` function. However, for forward mode AD
+we perform a more efficient computation.
+"""
+function batched_gradient end
 
 """
     batched_pickchunksize(X::AbstractArray, n::Int)
