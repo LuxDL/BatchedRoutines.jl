@@ -29,6 +29,13 @@ Base.adjoint(A::UniformBlockDiagonalMatrix) = batched_adjoint(A)
 function batched_pinv(A::UniformBlockDiagonalMatrix)
     return UniformBlockDiagonalMatrix(batched_pinv(A.data))
 end
+function batched_inv(A::UniformBlockDiagonalMatrix)
+    return UniformBlockDiagonalMatrix(batched_inv(A.data))
+end
+
+function batched_reshape(A::UniformBlockDiagonalMatrix, dims...)
+    return UniformBlockDiagonalMatrix(batched_reshape(A.data, dims...))
+end
 
 # Adapt
 function Adapt.adapt_structure(to, x::UniformBlockDiagonalMatrix)

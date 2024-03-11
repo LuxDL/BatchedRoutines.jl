@@ -86,7 +86,26 @@ batchview(A::AbstractVector) = (A,)
 
 Compute the pseudo-inverse of `A` in batched mode.
 """
-@inline function batched_pinv(x::AbstractArray{T, 3}) where {T}
-    N1, N2, _ = size(x)
-    return mapfoldl(pinv, _cat3, batchview(x); init=_init_array_prototype(x, N1, N2, 0))
-end
+@inline batched_pinv(x::AbstractArray{T, 3}) where {T} = _batched_map(pinv, x)
+
+"""
+    batched_inv(A::AbstractArray{T, 3}) where {T}
+    batched_inv(A::UniformBlockDiagonalMatrix)
+
+Compute the inverse of `A` in batched mode.
+"""
+@inline batched_inv(x::AbstractArray{T, 3}) where {T} = _batched_map(inv, x)
+
+"""
+    batched_vec(x::AbstractArray)
+
+Reshape `x` into a matrix with the batch dimension as the last dimension.
+"""
+@inline batched_vec(x::AbstractArray) = batched_reshape(x, :)
+
+"""
+    batched_reshape(x::AbstractArray, dims...)
+
+Reshape `x` into an array with the batch dimension as the last dimension.
+"""
+@inline batched_reshape(x::AbstractArray, dims...) = reshape(x, dims..., nbatches(x))

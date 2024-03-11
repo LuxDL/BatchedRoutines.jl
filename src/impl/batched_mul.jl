@@ -1,8 +1,9 @@
 # Most of this code is from https://github.com/FluxML/NNlib.jl/blob/master/src/batched/batchedmul.jl
 # Entry Point
-@inline _batched_mul(A::BatchedMatrix, B::BatchedVector) = vec(_batched_mul(
-    A, reshape(B, :, 1)))
-@inline _batched_mul(A::BatchedVector, B::BatchedMatrix) = _batched_mul(reshape(A, :, 1), B)
+@inline _batched_mul(A::BatchedMatrix, B::BatchedVector) = batched_vec(_batched_mul(
+    A, reshape(B, :, 1, nbatches(B))))
+@inline _batched_mul(A::BatchedVector, B::BatchedMatrix) = _batched_mul(
+    reshape(A, :, 1, nbatches(A)), B)
 
 @inline function _batched_mul(A::BatchedMatrix{T1}, B::BatchedMatrix{T2}) where {T1, T2}
     if (nbatches(A) != nbatches(B)) && (nbatches(A) != 1 && nbatches(B) != 1)

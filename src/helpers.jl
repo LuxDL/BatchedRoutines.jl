@@ -93,4 +93,19 @@ end
 
 @inline _init_array_prototype(X::AbstractArray, lengths::Int...) = similar(X, lengths...)
 
-@inline _cat3(x, y) = cat(x, y; dims=Val(3))
+@inline _cat1(x, y) = vcat(x, y)
+@inline _cat2(x, y) = hcat(x, y)
+for i in 3:10
+    fname = Symbol("_cat", i)
+    @eval @inline $(fname)(x, y) = cat(x, y; dims=$(Val(i)))
+end
+
+@generated function _batched_map(f::F, X::AbstractArray{T, N}) where {F, T, N}
+    _cat_fn = Symbol("_cat", N)
+    return quote
+        X₁, Xᵣ = Iterators.peel(batchview(X))
+        _proto = f(X₁)
+        proto = reshape(_proto, size(_proto)..., 1)
+        return mapfoldl(f, $(_cat_fn), Xᵣ; init=proto)
+    end
+end

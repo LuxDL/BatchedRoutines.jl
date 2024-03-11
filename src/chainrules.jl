@@ -40,26 +40,44 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
 end
 
 # batched_mul rrule
-function CRC.rrule(::typeof(batched_mul), A::AbstractArray{T1, 3},
+function CRC.rrule(::typeof(_batched_mul), A::AbstractArray{T1, 3},
         B::AbstractArray{T2, 3}) where {T1, T2}
     function ∇batched_mul(_Δ)
         Δ = CRC.unthunk(_Δ)
-        Athunk = CRC.@thunk begin
+        ∂A = CRC.@thunk begin
             tmp = batched_mul(Δ, batched_adjoint(B))
             size(A, 3) == 1 ? sum(tmp; dims=3) : tmp
         end
-        Bthunk = CRC.@thunk begin
+        ∂B = CRC.@thunk begin
             tmp = batched_mul(batched_adjoint(A), Δ)
             size(B, 3) == 1 ? sum(tmp; dims=3) : tmp
         end
-        return (NoTangent(), Athunk, Bthunk)
+        return (NoTangent(), ∂A, ∂B)
     end
     return batched_mul(A, B), ∇batched_mul
 end
 
+function CRC.rrule(::typeof(*), X::UniformBlockDiagonalMatrix{<:Union{Real, Complex}},
+        Y::AbstractMatrix{<:Union{Real, Complex}})
+    function ∇times(_Δ)
+        Δ = CRC.unthunk(_Δ)
+        ∂X = CRC.@thunk(Δ*batched_adjoint(batched_reshape(Y, :, 1)))
+        ∂Y = CRC.@thunk begin
+            res = (X' * Δ)
+            Y isa UniformBlockDiagonalMatrix ? res : dropdims(res.data; dims=2)
+        end
+        return (NoTangent(), ∂X, ∂Y)
+    end
+    return X * Y, ∇times
+end
+
 # constructor
 function CRC.rrule(::Type{<:UniformBlockDiagonalMatrix}, data)
-    ∇UniformBlockDiagonalMatrix(Δ) = (NoTangent(), Δ.data)
+    function ∇UniformBlockDiagonalMatrix(Δ)
+        ∂data = Δ isa UniformBlockDiagonalMatrix ? Δ.data :
+                (Δ isa NoTangent ? NoTangent() : Δ)
+        return (NoTangent(), ∂data)
+    end
     return UniformBlockDiagonalMatrix(data), ∇UniformBlockDiagonalMatrix
 end
 

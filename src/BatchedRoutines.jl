@@ -13,6 +13,7 @@ import PrecompileTools: @recompile_invalidations
     using FillArrays: Fill
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!, pinv
+    using LuxDeviceUtils: LuxDeviceUtils
 end
 
 const CRC = ChainRulesCore

@@ -6,6 +6,7 @@ using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalMatrix, batched_jaco
                        batched_mul, batched_pickchunksize, _assert_type
 using FastClosures: @closure
 using ForwardDiff: ForwardDiff
+using LuxDeviceUtils: LuxDeviceUtils, get_device
 
 # api.jl
 function BatchedRoutines.batched_pickchunksize(
@@ -26,25 +27,27 @@ end
     idxs_prev = 1:(idx - 1)
     idxs_next = (idx + chunksize):N
 
+    dev = get_device(u)
+
     partials = map(
         𝒾 -> Partials(ntuple(𝒿 -> ifelse(𝒾 == 𝒿, oneunit(T), zero(T)), chunksize)),
-        parameterless_type(u){Int}(collect(1:length(idxs))))
+        dev(collect(1:length(idxs))))
     u_part_duals = Dual.(u[idxs, :], partials)
 
     if length(idxs_prev) == 0
         u_part_prev = similar(u_part_duals, 0, B)
     else
         u_part_prev = Dual.(u[idxs_prev, :],
-            Partials.(map(𝒾 -> ntuple(_ -> zero(T), chunksize),
-                parameterless_type(u){Int}(collect(1:length(idxs_prev))))))
+            Partials.(map(
+                𝒾 -> ntuple(_ -> zero(T), chunksize), dev(collect(1:length(idxs_prev))))))
     end
 
     if length(idxs_next) == 0
         u_part_next = similar(u_part_duals, 0, B)
     else
         u_part_next = Dual.(u[idxs_next, :],
-            Partials.(map(𝒾 -> ntuple(_ -> zero(T), chunksize),
-                parameterless_type(u){Int}(collect(1:length(idxs_next))))))
+            Partials.(map(
+                𝒾 -> ntuple(_ -> zero(T), chunksize), dev(collect(1:length(idxs_next))))))
     end
 
     u_duals = vcat(u_part_prev, u_part_duals, u_part_next)
