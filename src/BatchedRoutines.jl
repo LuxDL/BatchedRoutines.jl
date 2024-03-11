@@ -12,7 +12,7 @@ import PrecompileTools: @recompile_invalidations
     using FastClosures: @closure
     using FillArrays: Fill
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
-                         mul!
+                         mul!, pinv
 end
 
 const CRC = ChainRulesCore
