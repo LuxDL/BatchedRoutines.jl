@@ -190,8 +190,7 @@ end
         ::Val{2}, new_axes, x::AbstractArray{T, 2}) where {T}
     I, J, K = __standardize_axes(new_axes)
     @assert I * K == size(x, 1) && J * K == size(x, 2)
-    return mapfoldl((x, y) -> cat(x, y; dims=Val(3)), 1:K;
-        init=_init_array_prototype(x, I, J, 0)) do k
+    return mapfoldl(_cat3, 1:K; init=_init_array_prototype(x, I, J, 0)) do k
         return view(x, ((k - 1) * I + 1):(k * I), ((k - 1) * J + 1):(k * J))
     end
 end
@@ -239,7 +238,6 @@ end
 
 # LinearAlgebra
 abstract type AbstractBatchedMatrixFactorization end
-
 
 function LinearAlgebra.ldiv!(A::AbstractBatchedMatrixFactorization, b::AbstractVector)
     return LinearAlgebra.ldiv!(A, reshape(b, :, nbatches(A)))

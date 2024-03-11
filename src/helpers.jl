@@ -92,3 +92,5 @@ function _copy_if_strided(X::Union{BatchedMatrix{T}, BatchedVector{T}}) where {T
 end
 
 @inline _init_array_prototype(X::AbstractArray, lengths::Int...) = similar(X, lengths...)
+
+@inline _cat3(x, y) = cat(x, y; dims=Val(3))

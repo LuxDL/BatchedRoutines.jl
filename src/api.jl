@@ -55,9 +55,7 @@ batched_transpose(X::BatchedMatrix) = PermutedDimsArray(X, (2, 1, 3))
 Adjoint the first two dimensions of `X`.
 """
 batched_adjoint(X::BatchedMatrix{<:Real}) = batched_transpose(X)
-function batched_adjoint(X::BatchedMatrix)
-    return mapfoldl(adjoint, (x, y) -> cat(x, y; dims=Val(3)), batchview(X))
-end
+batched_adjoint(X::BatchedMatrix) = mapfoldl(adjoint, _cat3, batchview(X))
 
 """
     nbatches(A::AbstractArray)
@@ -81,3 +79,14 @@ function batchview(A::AbstractVector, idx::Int)
 end
 batchview(A::AbstractArray) = eachslice(A; dims=ndims(A))
 batchview(A::AbstractVector) = (A,)
+
+"""
+    batched_pinv(A::AbstractArray{T, 3}) where {T}
+    batched_pinv(A::UniformBlockDiagonalMatrix)
+
+Compute the pseudo-inverse of `A` in batched mode.
+"""
+@inline function batched_pinv(x::AbstractArray{T, 3}) where {T}
+    N1, N2, _ = size(x)
+    return mapfoldl(pinv, _cat3, batchview(x); init=_init_array_prototype(x, N1, N2, 0))
+end

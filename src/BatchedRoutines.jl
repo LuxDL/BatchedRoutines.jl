@@ -34,7 +34,7 @@ include("impl/batched_mul.jl")
 include("impl/batched_gmres.jl")
 
 export AutoFiniteDiff, AutoForwardDiff
-export batched_adjoint, batched_jacobian, batched_pickchunksize, batched_mul,
+export batched_adjoint, batched_jacobian, batched_pickchunksize, batched_mul, batched_pinv,
        batched_transpose
 export batchview, nbatches
 export UniformBlockDiagonalMatrix
