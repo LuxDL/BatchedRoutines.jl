@@ -17,7 +17,7 @@ prob2 = LinearProblem(A2, b)
 # Batched GMRES
 @benchmark solve(prob1, KrylovJL_GMRES())
 @benchmark solve(prob2, KrylovJL_GMRES())
-@benchmark solve(prob2, SimpleGMRES(; blocksize = size(A1.data, 1)))
+@benchmark solve(prob2, SimpleGMRES(; blocksize=size(A1.data, 1)))
 
 # CUDA
 cuA1 = cu(A1);
@@ -35,5 +35,4 @@ prob2 = LinearProblem(cuA2, cub)
 
 @benchmark CUDA.@sync solve(prob1, KrylovJL_GMRES())
 @benchmark CUDA.@sync solve(prob2, KrylovJL_GMRES())
-@benchmark CUDA.@sync solve(prob2, SimpleGMRES(; blocksize = size(A1.data, 1)))
-
+@benchmark CUDA.@sync solve(prob2, SimpleGMRES(; blocksize=size(A1.data, 1)))

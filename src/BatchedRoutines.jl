@@ -29,10 +29,11 @@ const BatchedMatrix{T} = AbstractArray{T, 3}
 include("api.jl")
 include("helpers.jl")
 include("matrix.jl")
-include("chainrules.jl")
 
 include("impl/batched_mul.jl")
 include("impl/batched_gmres.jl")
+
+include("chainrules.jl")
 
 export AutoFiniteDiff, AutoForwardDiff
 export batched_adjoint, batched_jacobian, batched_pickchunksize, batched_mul, batched_pinv,
