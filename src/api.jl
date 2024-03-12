@@ -10,7 +10,10 @@ Use the backend `ad` to compute the Jacobian of `f` at `x` in batched mode. Retu
     If the batches interact among themselves, then the Jacobian is not block diagonal and
     this function will not work as expected.
 """
-function batched_jacobian end
+function batched_jacobian(ad, f::F, u::AbstractVecOrMat) where {F}
+    _assert_loaded_backend(ad)
+    return _batched_jacobian(ad, f, u)
+end
 
 @inline function batched_jacobian(ad, f::F, u::AbstractArray) where {F}
     B = size(u, ndims(u))
@@ -29,19 +32,13 @@ Use the backend `ad` to compute the batched_gradient of `f` at `x`. For the forw
 different from calling the batched_gradient function in the backend. This exists to efficiently swap
 backends for computing the `batched_gradient` of the `batched_gradient`.
 """
-function batched_gradient end
-
-function batched_gradient(ad, f::F, u::AbstractVector) where {F}
-    return vec(batched_gradient(ad, f, reshape(u, 1, :)))
+function batched_gradient(ad, f::F, u) where {F}
+    _assert_loaded_backend(ad)
+    return _batched_gradient(ad, f, u)
 end
 
-function batched_gradient(ad, f::F, u::AbstractArray) where {F}
-    B = size(u, ndims(u))
-    f_mat = @closure x -> reshape(f(reshape(x, size(u))), :, B)
-    return reshape(batched_gradient(ad, f_mat, reshape(u, :, B)), size(u))
-end
-
-@inline batched_gradient(ad, f::F, u, p) where {F} = batched_gradient(ad, Base.Fix2(f, p), u)
+@inline batched_gradient(ad, f::F, u, p) where {F} = batched_gradient(
+    ad, Base.Fix2(f, p), u)
 
 """
     batched_pickchunksize(X::AbstractArray, n::Int)

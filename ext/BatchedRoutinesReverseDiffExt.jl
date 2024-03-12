@@ -14,8 +14,7 @@ const CRC = ChainRulesCore
 Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:ReverseDiff.TrackedArray})=false
 Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{<:ReverseDiff.TrackedReal}})=false
 
-function BatchedRoutines.batched_gradient(
-        ::AutoReverseDiff, f::F, u::AbstractMatrix) where {F}
+function BatchedRoutines._batched_gradient(::AutoReverseDiff, f::F, u) where {F}
     return ReverseDiff.gradient(f, u)
 end
 
@@ -37,7 +36,7 @@ function (pb_f::ReverseDiffPullbackFunction)(Δ)
     return pb_f.∂input
 end
 
-function _value_and_pullback(f::F, x) where {F}
+function BatchedRoutines._value_and_pullback(::AutoReverseDiff, f::F, x) where {F}
     tape = ReverseDiff.InstructionTape()
     ∂x = zero(x)
     x_tracked = ReverseDiff.TrackedArray(x, ∂x, tape)
@@ -50,25 +49,6 @@ function _value_and_pullback(f::F, x) where {F}
     end
 
     return y, ReverseDiffPullbackFunction(tape, ∂x, y_tracked)
-end
-
-function CRC.rrule(::typeof(BatchedRoutines.batched_gradient),
-        ad::AutoReverseDiff, f::F, x::AbstractMatrix) where {F}
-    if BatchedRoutines._is_extension_loaded(Val(:ForwardDiff))
-        dx = BatchedRoutines.batched_gradient(ad, f, x)
-        # Use Forward Over Reverse to compute the Hessian Vector Product
-        ∇batched_gradient = @closure Δ -> begin
-            ∂x = BatchedRoutines._jacobian_vector_product(
-                AutoForwardDiff(), @closure(x->BatchedRoutines.batched_gradient(ad, f, x)),
-                x, reshape(Δ, size(x)))
-            return NoTangent(), NoTangent(), NoTangent(), ∂x
-        end
-        return dx, ∇batched_gradient
-    end
-
-    dx, pb_f = _value_and_pullback(Base.Fix1(ReverseDiff.gradient, f), x)
-    ∇batched_gradient = @closure Δ -> (NoTangent(), NoTangent(), NoTangent(), pb_f(Δ))
-    return dx, ∇batched_gradient
 end
 
 end

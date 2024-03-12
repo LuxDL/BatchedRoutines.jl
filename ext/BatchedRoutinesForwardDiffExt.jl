@@ -123,7 +123,7 @@ end
 end
 
 ## Exposed API
-@inline function BatchedRoutines.batched_jacobian(
+@inline function BatchedRoutines._batched_jacobian(
         ad::AutoForwardDiff{CK}, f::F, u::AbstractVector{T}) where {CK, F, T}
     tag = ad.tag === nothing ? ForwardDiff.Tag{F, eltype(u)}() : ad.tag
     if CK === nothing || CK ≤ 0
@@ -138,13 +138,13 @@ end
     return UniformBlockDiagonalMatrix(J)
 end
 
-@inline function BatchedRoutines.batched_jacobian(
+@inline function BatchedRoutines._batched_jacobian(
         ad::AutoForwardDiff, f::F, u::AbstractMatrix) where {F}
     return last(BatchedRoutines.__batched_value_and_jacobian(ad, f, u))
 end
 
-@inline function BatchedRoutines.batched_gradient(
-        ad::AutoForwardDiff{CK}, f::F, u::AbstractMatrix) where {F, CK}
+@inline function BatchedRoutines._batched_gradient(
+        ad::AutoForwardDiff{CK}, f::F, u) where {F, CK}
     tag = ad.tag === nothing ? ForwardDiff.Tag{F, eltype(u)}() : ad.tag
     if CK === nothing || CK ≤ 0
         cfg = ForwardDiff.GradientConfig(
@@ -164,6 +164,16 @@ function BatchedRoutines._jacobian_vector_product(ad::AutoForwardDiff, f::F, x, 
     partials = ForwardDiff.Partials{1, T}.(tuple.(u))
     u_dual = ForwardDiff.Dual{Tag, T, 1}.(u, partials)
     y_dual = f(u_dual)
+    return ForwardDiff.partials.(y_dual, 1)
+end
+
+function BatchedRoutines._jacobian_vector_product(
+        ad::AutoForwardDiff, f::F, x, u, p) where {F}
+    Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
+    T = promote_type(eltype(x), eltype(u))
+    partials = ForwardDiff.Partials{1, T}.(tuple.(u))
+    u_dual = ForwardDiff.Dual{Tag, T, 1}.(u, partials)
+    y_dual = f(u_dual, p)
     return ForwardDiff.partials.(y_dual, 1)
 end
 

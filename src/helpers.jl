@@ -117,3 +117,14 @@ end
 # Useful for computing the gradient of a gradient
 function _jacobian_vector_product end
 function _vector_jacobian_product end
+function _value_and_pullback end
+function _batched_jacobian end
+function _batched_gradient end
+
+# Test Loaded AD Backend
+_assert_loaded_backend(::AutoForwardDiff) = @assert _is_extension_loaded(Val(:ForwardDiff))
+_assert_loaded_backend(::AutoReverseDiff) = @assert _is_extension_loaded(Val(:ReverseDiff))
+_assert_loaded_backend(::AutoFiniteDiff) = @assert _is_extension_loaded(Val(:FiniteDiff))
+_assert_loaded_backend(::AutoZygote) = @assert _is_extension_loaded(Val(:Zygote))
+
+CRC.@non_differentiable _assert_loaded_backend(::Any...)

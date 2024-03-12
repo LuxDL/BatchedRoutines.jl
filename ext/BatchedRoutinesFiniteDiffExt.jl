@@ -10,7 +10,7 @@ using FiniteDiff: FiniteDiff
 
 # api.jl
 ## Exposed API
-@inline function BatchedRoutines.batched_jacobian(
+@inline function BatchedRoutines._batched_jacobian(
         ad::AutoFiniteDiff, f::F, x::AbstractVector{T}) where {F, T}
     J = FiniteDiff.finite_difference_jacobian(f, x, ad.fdjtype)
     (_assert_type(f) && _assert_type(x) && Base.issingletontype(F)) &&
@@ -18,7 +18,7 @@ using FiniteDiff: FiniteDiff
     return UniformBlockDiagonalMatrix(J)
 end
 
-@inline function BatchedRoutines.batched_jacobian(
+@inline function BatchedRoutines._batched_jacobian(
         ad::AutoFiniteDiff, f::F, x::AbstractMatrix) where {F}
     f! = @closure (y, x_) -> copyto!(y, f(x_))
     fx = f(x)
@@ -31,7 +31,7 @@ end
 end
 
 # NOTE: This doesn't exploit batching
-@inline function BatchedRoutines.batched_gradient(ad::AutoFiniteDiff, f::F, x) where {F}
+@inline function BatchedRoutines._batched_gradient(ad::AutoFiniteDiff, f::F, x) where {F}
     return FiniteDiff.finite_difference_batched_gradient(f, x, ad.fdjtype)
 end
 

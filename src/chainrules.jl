@@ -3,7 +3,7 @@ function __batched_value_and_jacobian(ad, f::F, x) where {F}
     return f(x), J
 end
 
-# Reverse over Forward: Just construct Hessian for now
+# FIXME: Gradient of jacobians is really in-efficient here
 function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x::AbstractMatrix) where {F}
     N, B = size(x)
     J, H = __batched_value_and_jacobian(
@@ -23,7 +23,6 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
     J, H = __batched_value_and_jacobian(
         ad, @closure(y->reshape(batched_jacobian(ad, f, y, p).data, :, B)), x)
 
-    # TODO: This can be written as a JVP
     p_size = size(p)
     _, Jₚ_ = __batched_value_and_jacobian(
         ad, @closure(p->reshape(batched_jacobian(ad, f, x, reshape(p, p_size)).data, :, B)),
@@ -40,16 +39,36 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
     return UniformBlockDiagonalMatrix(reshape(J, :, N, B)), ∇batched_jacobian
 end
 
-function CRC.rrule(::typeof(batched_gradient), ad, f::F, x::AbstractMatrix) where {F}
-    N, B = size(x)
-    dx, J = BatchedRoutines.__batched_value_and_jacobian(
-        ad, @closure(x->batched_gradient(ad, f, x)), x)
+function CRC.rrule(::typeof(batched_gradient), ad, f::F, x) where {F}
+    BatchedRoutines._is_extension_loaded(Val(:ForwardDiff)) ||
+        throw(ArgumentError("`ForwardDiff.jl` needs to be loaded to compute the gradient \
+                             of `batched_gradient`."))
 
-    function ∇batched_gradient(Δ)
-        ∂x = reshape(batched_mul(reshape(Δ, 1, :, nbatches(Δ)), J.data), :, nbatches(Δ))
+    dx = BatchedRoutines.batched_gradient(ad, f, x)
+    ∇batched_gradient = @closure Δ -> begin
+        ∂x = _jacobian_vector_product(
+            AutoForwardDiff(), @closure(x->BatchedRoutines.batched_gradient(ad, f, x)),
+            x, reshape(Δ, size(x)))
         return NoTangent(), NoTangent(), NoTangent(), ∂x
     end
+    return dx, ∇batched_gradient
+end
 
+function CRC.rrule(::typeof(batched_gradient), ad, f::F, x, p) where {F}
+    BatchedRoutines._is_extension_loaded(Val(:ForwardDiff)) ||
+        throw(ArgumentError("`ForwardDiff.jl` needs to be loaded to compute the gradient \
+                             of `batched_gradient`."))
+
+    dx = BatchedRoutines.batched_gradient(ad, f, x, p)
+    ∇batched_gradient = @closure Δ -> begin
+        ∂x = _jacobian_vector_product(AutoForwardDiff(),
+            @closure(x->BatchedRoutines.batched_gradient(ad, Base.Fix2(f, p), x)),
+            x, reshape(Δ, size(x)))
+        ∂p = _jacobian_vector_product(AutoForwardDiff(),
+            @closure((x, p)->BatchedRoutines.batched_gradient(ad, Base.Fix1(f, x), p)),
+            x, reshape(Δ, size(x)), p)
+        return NoTangent(), NoTangent(), NoTangent(), ∂x, ∂p
+    end
     return dx, ∇batched_gradient
 end
 
