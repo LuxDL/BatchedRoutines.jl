@@ -23,7 +23,7 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
     J, H = __batched_value_and_jacobian(
         ad, @closure(y->reshape(batched_jacobian(ad, f, y, p).data, :, B)), x)
 
-    # TODO: For `CPU` arrays we can do ReverseDiff over ForwardDiff
+    # TODO: This can be written as a JVP
     p_size = size(p)
     _, Jₚ_ = __batched_value_and_jacobian(
         ad, @closure(p->reshape(batched_jacobian(ad, f, x, reshape(p, p_size)).data, :, B)),
