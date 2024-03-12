@@ -4,6 +4,11 @@
 
 Use the backend `ad` to compute the Jacobian of `f` at `x` in batched mode. Returns a
 [`UniformBlockDiagonalMatrix`](@ref) as the Jacobian.
+
+!!! warning
+
+    If the batches interact among themselves, then the Jacobian is not block diagonal and
+    this function will not work as expected.
 """
 function batched_jacobian end
 
@@ -18,12 +23,25 @@ end
 
 """
     batched_gradient(ad, f::F, x) where {F}
+    batched_gradient(ad, f::F, x, p) where {F}
 
-Use the backend `ad` to compute the gradient of `f` at `x` in batched mode. Note that for
-reverse mode AD we just call the internal `gradient` function. However, for forward mode AD
-we perform a more efficient computation.
+Use the backend `ad` to compute the batched_gradient of `f` at `x`. For the forward pass this is no
+different from calling the batched_gradient function in the backend. This exists to efficiently swap
+backends for computing the `batched_gradient` of the `batched_gradient`.
 """
 function batched_gradient end
+
+function batched_gradient(ad, f::F, u::AbstractVector) where {F}
+    return vec(batched_gradient(ad, f, reshape(u, 1, :)))
+end
+
+function batched_gradient(ad, f::F, u::AbstractArray) where {F}
+    B = size(u, ndims(u))
+    f_mat = @closure x -> reshape(f(reshape(x, size(u))), :, B)
+    return reshape(batched_gradient(ad, f_mat, reshape(u, :, B)), size(u))
+end
+
+@inline batched_gradient(ad, f::F, u, p) where {F} = batched_gradient(ad, Base.Fix2(f, p), u)
 
 """
     batched_pickchunksize(X::AbstractArray, n::Int)

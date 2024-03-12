@@ -3,8 +3,8 @@ module BatchedRoutines
 import PrecompileTools: @recompile_invalidations
 
 @recompile_invalidations begin
-    using ADTypes: AutoFiniteDiff, AutoForwardDiff, AutoSparseForwardDiff,
-                   AutoSparsePolyesterForwardDiff, AutoPolyesterForwardDiff
+    using ADTypes: AutoFiniteDiff, AutoForwardDiff, AutoReverseDiff, AutoSparseForwardDiff,
+                   AutoSparsePolyesterForwardDiff, AutoPolyesterForwardDiff, AutoZygote
     using Adapt: Adapt
     using ArrayInterface: ArrayInterface, parameterless_type
     using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
@@ -13,7 +13,7 @@ import PrecompileTools: @recompile_invalidations
     using FillArrays: Fill
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!, pinv
-    using LuxDeviceUtils: LuxDeviceUtils
+    using LuxDeviceUtils: LuxDeviceUtils, get_device
 end
 
 const CRC = ChainRulesCore
@@ -35,9 +35,9 @@ include("impl/batched_gmres.jl")
 
 include("chainrules.jl")
 
-export AutoFiniteDiff, AutoForwardDiff
-export batched_adjoint, batched_jacobian, batched_pickchunksize, batched_mul, batched_pinv,
-       batched_transpose
+export AutoFiniteDiff, AutoForwardDiff, AutoReverseDiff, AutoZygote
+export batched_adjoint, batched_gradient, batched_jacobian, batched_pickchunksize,
+       batched_mul, batched_pinv, batched_transpose
 export batchview, nbatches
 export UniformBlockDiagonalMatrix
 

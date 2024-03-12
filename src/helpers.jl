@@ -109,3 +109,11 @@ end
         return mapfoldl(f, $(_cat_fn), Xᵣ; init=proto)
     end
 end
+
+@inline _array_on_cpu(x) = _array_on_cpu(get_device(x))
+@inline _array_on_cpu(x::LuxDeviceUtils.LuxCPUDevice) = true
+@inline _array_on_cpu(x::LuxDeviceUtils.AbstractLuxGPUDevice) = false
+
+# Useful for computing the gradient of a gradient
+function _jacobian_vector_product end
+function _vector_jacobian_product end

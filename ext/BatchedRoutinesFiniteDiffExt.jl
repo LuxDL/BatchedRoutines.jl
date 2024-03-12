@@ -6,6 +6,8 @@ using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalMatrix, _assert_type
 using FastClosures: @closure
 using FiniteDiff: FiniteDiff
 
+@inline BatchedRoutines._is_extension_loaded(::Val{:FiniteDiff}) = true
+
 # api.jl
 ## Exposed API
 @inline function BatchedRoutines.batched_jacobian(
@@ -26,6 +28,11 @@ end
         x, fx, ad.fdjtype; colorvec=matrix_colors(J), sparsity=J)
     FiniteDiff.finite_difference_jacobian!(J, f!, x, sparsecache)
     return J
+end
+
+# NOTE: This doesn't exploit batching
+@inline function BatchedRoutines.batched_gradient(ad::AutoFiniteDiff, f::F, x) where {F}
+    return FiniteDiff.finite_difference_batched_gradient(f, x, ad.fdjtype)
 end
 
 end

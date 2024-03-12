@@ -4,9 +4,14 @@ using ADTypes: AutoForwardDiff
 using ArrayInterface: parameterless_type
 using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalMatrix, batched_jacobian,
                        batched_mul, batched_pickchunksize, _assert_type
+using ChainRulesCore: ChainRulesCore
 using FastClosures: @closure
 using ForwardDiff: ForwardDiff
 using LuxDeviceUtils: LuxDeviceUtils, get_device
+
+const CRC = ChainRulesCore
+
+@inline BatchedRoutines._is_extension_loaded(::Val{:ForwardDiff}) = true
 
 # api.jl
 function BatchedRoutines.batched_pickchunksize(
@@ -138,7 +143,28 @@ end
     return last(BatchedRoutines.__batched_value_and_jacobian(ad, f, u))
 end
 
+@inline function BatchedRoutines.batched_gradient(
+        ad::AutoForwardDiff{CK}, f::F, u::AbstractMatrix) where {F, CK}
+    tag = ad.tag === nothing ? ForwardDiff.Tag{F, eltype(u)}() : ad.tag
+    if CK === nothing || CK ≤ 0
+        cfg = ForwardDiff.GradientConfig(
+            f, u, ForwardDiff.Chunk{batched_pickchunksize(vec(u))}(), tag)
+    else
+        cfg = ForwardDiff.GradientConfig(f, u, ForwardDiff.Chunk{CK}(), tag)
+    end
+    return ForwardDiff.gradient(f, u, cfg)
+end
+
 # helpers.jl
 Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{<:ForwardDiff.Dual}})=false
+
+function BatchedRoutines._jacobian_vector_product(ad::AutoForwardDiff, f::F, x, u) where {F}
+    Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
+    T = promote_type(eltype(x), eltype(u))
+    partials = ForwardDiff.Partials{1, T}.(tuple.(u))
+    u_dual = ForwardDiff.Dual{Tag, T, 1}.(u, partials)
+    y_dual = f(u_dual)
+    return ForwardDiff.partials.(y_dual, 1)
+end
 
 end

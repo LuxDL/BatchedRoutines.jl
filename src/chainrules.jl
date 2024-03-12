@@ -23,6 +23,7 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
     J, H = __batched_value_and_jacobian(
         ad, @closure(y->reshape(batched_jacobian(ad, f, y, p).data, :, B)), x)
 
+    # TODO: For `CPU` arrays we can do ReverseDiff over ForwardDiff
     p_size = size(p)
     _, Jₚ_ = __batched_value_and_jacobian(
         ad, @closure(p->reshape(batched_jacobian(ad, f, x, reshape(p, p_size)).data, :, B)),
@@ -37,6 +38,19 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
     end
 
     return UniformBlockDiagonalMatrix(reshape(J, :, N, B)), ∇batched_jacobian
+end
+
+function CRC.rrule(::typeof(batched_gradient), ad, f::F, x::AbstractMatrix) where {F}
+    N, B = size(x)
+    dx, J = BatchedRoutines.__batched_value_and_jacobian(
+        ad, @closure(x->batched_gradient(ad, f, x)), x)
+
+    function ∇batched_gradient(Δ)
+        ∂x = reshape(batched_mul(reshape(Δ, 1, :, nbatches(Δ)), J.data), :, nbatches(Δ))
+        return NoTangent(), NoTangent(), NoTangent(), ∂x
+    end
+
+    return dx, ∇batched_gradient
 end
 
 # batched_mul rrule
