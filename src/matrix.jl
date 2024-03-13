@@ -18,6 +18,9 @@ function batched_transpose(X::UniformBlockDiagonalMatrix)
     return UniformBlockDiagonalMatrix(batched_transpose(X.data))
 end
 
+# To support ReverseDiff
+Base.IndexStyle(::Type{<:UniformBlockDiagonalMatrix}) = IndexLinear()
+
 Base.transpose(A::UniformBlockDiagonalMatrix) = batched_transpose(A)
 
 function batched_adjoint(X::UniformBlockDiagonalMatrix)
@@ -87,6 +90,10 @@ Base.@propagate_inbounds function Base.getindex(
     return A.data[i_, j_, k]
 end
 
+Base.@propagate_inbounds function Base.getindex(A::UniformBlockDiagonalMatrix, idx::Int)
+    return getindex(A, mod1(idx, size(A, 1)), (idx - 1) ÷ size(A, 1) + 1)
+end
+
 Base.@propagate_inbounds function Base.setindex!(
         A::UniformBlockDiagonalMatrix, v, i::Int, j::Int)
     i_, j_, k = _block_indices(A, i, j)
@@ -95,6 +102,11 @@ Base.@propagate_inbounds function Base.setindex!(
         throw(ArgumentError("cannot set non-zero value outside of block."))
     A.data[i_, j_, k] = v
     return v
+end
+
+Base.@propagate_inbounds function Base.setindex!(A::UniformBlockDiagonalMatrix, v, idx::Int)
+    @show size(A)
+    return setindex!(A, v, mod1(idx, size(A, 1)), (idx - 1) ÷ size(A, 1) + 1)
 end
 
 function _block_indices(A::UniformBlockDiagonalMatrix, i::Int, j::Int)
@@ -247,6 +259,11 @@ function Base.:*(X::AbstractArray{T, 3}, Y::UniformBlockDiagonalMatrix) where {T
     return UniformBlockDiagonalMatrix(batched_mul(X, Y.data))
 end
 
+function Base.:*(X::AbstractArray{T, 2}, Y::UniformBlockDiagonalMatrix) where {T}
+    C = reshape(X, 1, :, nbatches(X)) * Y
+    return dropdims(C.data; dims=1)
+end
+
 # LinearAlgebra
 abstract type AbstractBatchedMatrixFactorization end
 
@@ -264,6 +281,12 @@ function LinearAlgebra.:\(A::AbstractBatchedMatrixFactorization, b::AbstractVect
     X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
     LinearAlgebra.ldiv!(X, A, b)
     return X
+end
+
+function LinearAlgebra.:\(A::AbstractBatchedMatrixFactorization, b::AbstractMatrix)
+    X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
+    LinearAlgebra.ldiv!(X, A, vec(b))
+    return reshape(X, :, nbatches(b))
 end
 
 struct GenericBatchedFactorization{A, F} <: AbstractBatchedMatrixFactorization
@@ -327,7 +350,7 @@ end
 function LinearAlgebra.ldiv!(A::GenericBatchedFactorization, b::AbstractMatrix)
     @assert nbatches(A) == nbatches(b)
     for i in 1:nbatches(A)
-        ldiv!(batchview(A, i), batchview(b, i))
+        LinearAlgebra.ldiv!(batchview(A, i), batchview(b, i))
     end
     return b
 end
