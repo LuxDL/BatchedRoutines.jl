@@ -18,6 +18,8 @@ function BatchedRoutines._batched_gradient(::AutoReverseDiff, f::F, u) where {F}
     return ReverseDiff.gradient(f, u)
 end
 
+# TODO: Fix the gradient call over ReverseDiff
+
 @concrete struct ReverseDiffPullbackFunction <: Function
     tape
     ∂input

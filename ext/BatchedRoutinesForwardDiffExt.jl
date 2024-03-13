@@ -162,8 +162,8 @@ function BatchedRoutines._jacobian_vector_product(ad::AutoForwardDiff, f::F, x, 
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
     T = promote_type(eltype(x), eltype(u))
     partials = ForwardDiff.Partials{1, T}.(tuple.(u))
-    u_dual = ForwardDiff.Dual{Tag, T, 1}.(u, partials)
-    y_dual = f(u_dual)
+    x_dual = ForwardDiff.Dual{Tag, T, 1}.(x, partials)
+    y_dual = f(x_dual)
     return ForwardDiff.partials.(y_dual, 1)
 end
 
@@ -172,8 +172,8 @@ function BatchedRoutines._jacobian_vector_product(
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
     T = promote_type(eltype(x), eltype(u))
     partials = ForwardDiff.Partials{1, T}.(tuple.(u))
-    u_dual = ForwardDiff.Dual{Tag, T, 1}.(u, partials)
-    y_dual = f(u_dual, p)
+    x_dual = ForwardDiff.Dual{Tag, T, 1}.(x, partials)
+    y_dual = f(x_dual, p)
     return ForwardDiff.partials.(y_dual, 1)
 end
 
