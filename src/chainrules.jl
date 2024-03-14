@@ -15,7 +15,7 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x::AbstractMatrix) wher
     ∇batched_jacobian = Δ -> begin
         gradient_ad = AutoZygote()
         _map_fnₓ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
-            x -> batched_gradient(gradient_ad, x_ -> sum(vec(f(x_, p))[i:i]), x),
+            x -> batched_gradient(gradient_ad, x_ -> sum(vec(f(x_))[i:i]), x),
             x, reshape(Δᵢ, size(x)))
         ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(eachrow(Δ))), size(x))
         return NoTangent(), NoTangent(), NoTangent(), ∂x

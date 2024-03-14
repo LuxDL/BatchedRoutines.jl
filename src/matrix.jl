@@ -125,7 +125,7 @@ function Base.Matrix(A::UniformBlockDiagonalMatrix)
     L1, L2, _ = size(A.data)
     fill!(M, false)
     for (i, Aᵢ) in enumerate(batchview(A))
-        M[((i - 1) * L1 + 1):(i * L1), ((i - 1) * L2 + 1):(i * L2)] .= Aᵢ
+        M[((i - 1) * L1 + 1):(i * L1), ((i - 1) * L2 + 1):(i * L2)] .= Matrix(Aᵢ)
     end
     return M
 end
@@ -307,7 +307,9 @@ function Base.size(F::GenericBatchedFactorization, i::Integer)
 end
 Base.eltype(F::GenericBatchedFactorization) = eltype(first(F.fact))
 
-LinearAlgebra.issuccess(fact::GenericBatchedFactorization) = all(issuccess, fact.fact)
+function LinearAlgebra.issuccess(fact::GenericBatchedFactorization)
+    return all(LinearAlgebra.issuccess, fact.fact)
+end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::GenericBatchedFactorization)
     println(io, "GenericBatchedFactorization() with Batch Count: $(nbatches(F))")
