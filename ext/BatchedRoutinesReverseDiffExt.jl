@@ -25,6 +25,9 @@ function BatchedRoutines.batched_jacobian(
     return BatchedRoutines.batched_jacobian(ad, f, ArrayInterface.aos_to_soa(x))
 end
 
+ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
+    ad, f, x::ReverseDiff.TrackedArray)
+
 function BatchedRoutines.batched_jacobian(
         ad, f::F, x::AbstractArray{<:ReverseDiff.TrackedReal},
         p::AbstractArray{<:ReverseDiff.TrackedReal}) where {F}
@@ -37,8 +40,10 @@ function BatchedRoutines.batched_jacobian(
     return BatchedRoutines.batched_jacobian(ad, f, x, ArrayInterface.aos_to_soa(p))
 end
 
-ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
-    ad, f, x::ReverseDiff.TrackedArray)
+function BatchedRoutines.batched_jacobian(
+        ad, f::F, x::AbstractArray{<:ReverseDiff.TrackedReal}, p::AbstractArray) where {F}
+    return BatchedRoutines.batched_jacobian(ad, f, ArrayInterface.aos_to_soa(x), p)
+end
 
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
     ad, f, x::ReverseDiff.TrackedArray, p::ReverseDiff.TrackedArray)
@@ -49,7 +54,39 @@ ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
     ad, f, x::ReverseDiff.TrackedArray, p)
 
-# TODO: Fix the gradient call over ReverseDiff
+function BatchedRoutines.batched_gradient(
+        ad, f::F, x::AbstractArray{<:ReverseDiff.TrackedReal}) where {F}
+    return BatchedRoutines.batched_gradient(ad, f, ArrayInterface.aos_to_soa(x))
+end
+
+ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
+    ad, f, x::ReverseDiff.TrackedArray)
+
+function BatchedRoutines.batched_gradient(
+        ad, f::F, x::AbstractArray{<:ReverseDiff.TrackedReal},
+        p::AbstractArray{<:ReverseDiff.TrackedReal}) where {F}
+    return BatchedRoutines.batched_gradient(
+        ad, f, ArrayInterface.aos_to_soa(x), ArrayInterface.aos_to_soa(p))
+end
+
+function BatchedRoutines.batched_gradient(
+        ad, f::F, x::AbstractArray, p::AbstractArray{<:ReverseDiff.TrackedReal}) where {F}
+    return BatchedRoutines.batched_gradient(ad, f, x, ArrayInterface.aos_to_soa(p))
+end
+
+function BatchedRoutines.batched_gradient(
+        ad, f::F, x::AbstractArray{<:ReverseDiff.TrackedReal}, p::AbstractArray) where {F}
+    return BatchedRoutines.batched_gradient(ad, f, ArrayInterface.aos_to_soa(x), p)
+end
+
+ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
+    ad, f, x::ReverseDiff.TrackedArray, p::ReverseDiff.TrackedArray)
+
+ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
+    ad, f, x, p::ReverseDiff.TrackedArray)
+
+ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
+    ad, f, x::ReverseDiff.TrackedArray, p)
 
 @concrete struct ReverseDiffPullbackFunction <: Function
     tape
