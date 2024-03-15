@@ -1,10 +1,16 @@
 # LU Factorization
-@concrete struct CuBatchedLU{T} <: AbstractBatchedMatrixFactorization
+@concrete struct CuBatchedLU{T} <: AbstractBatchedMatrixFactorization{T}
     factors
     pivot_array
     info
     size
 end
+
+const AdjCuBatchedLU{T} = LinearAlgebra.AdjointFactorization{T, <:CuBatchedLU{T}}
+const TransCuBatchedLU{T} = LinearAlgebra.TransposeFactorization{T, <:CuBatchedLU{T}}
+const AdjOrTransCuBatchedLU{T} = Union{AdjCuBatchedLU{T}, TransCuBatchedLU{T}}
+
+const AllCuBatchedLU{T} = Union{CuBatchedLU{T}, AdjOrTransCuBatchedLU{T}}
 
 BatchedRoutines.nbatches(LU::CuBatchedLU) = nbatches(LU.factors)
 function BatchedRoutines.batchview(LU::CuBatchedLU)
@@ -15,7 +21,6 @@ function BatchedRoutines.batchview(LU::CuBatchedLU, idx::Int)
 end
 Base.size(LU::CuBatchedLU) = LU.size
 Base.size(LU::CuBatchedLU, i::Integer) = LU.size[i]
-Base.eltype(::CuBatchedLU{T}) where {T} = T
 
 function Base.show(io::IO, LU::CuBatchedLU)
     return print(io, "CuBatchedLU() with Batch Count: $(nbatches(LU))")
@@ -43,24 +48,35 @@ function LinearAlgebra.ldiv!(A::CuBatchedLU, b::CuMatrix)
     return b
 end
 
-function LinearAlgebra.ldiv!(X::CuMatrix, A::CuBatchedLU, b::CuMatrix)
+function LinearAlgebra.ldiv!(A::AdjOrTransCuBatchedLU, b::CuMatrix)
+    @assert nbatches(A) == nbatches(b)
+    getrs_strided_batched!('T', parent(A).factors, parent(A).pivot_array, b)
+    return b
+end
+
+function LinearAlgebra.ldiv!(X::CuMatrix, A::AllCuBatchedLU, b::CuMatrix)
     copyto!(X, b)
     return LinearAlgebra.ldiv!(A, X)
 end
 
 # QR Factorization
-@concrete struct CuBatchedQR{T} <: AbstractBatchedMatrixFactorization
+@concrete struct CuBatchedQR{T} <: AbstractBatchedMatrixFactorization{T}
     factors
     τ
     size
 end
+
+const AdjCuBatchedQR{T} = LinearAlgebra.AdjointFactorization{T, <:CuBatchedQR{T}}
+const TransCuBatchedQR{T} = LinearAlgebra.TransposeFactorization{T, <:CuBatchedQR{T}}
+const AdjOrTransCuBatchedQR{T} = Union{AdjCuBatchedQR{T}, TransCuBatchedQR{T}}
+
+const AllCuBatchedQR{T} = Union{CuBatchedQR{T}, AdjOrTransCuBatchedQR{T}}
 
 BatchedRoutines.nbatches(QR::CuBatchedQR) = length(QR.factors)
 BatchedRoutines.batchview(QR::CuBatchedQR) = zip(QR.factors, QR.τ)
 BatchedRoutines.batchview(QR::CuBatchedQR, idx::Int) = QR.factors[idx], QR.τ[idx]
 Base.size(QR::CuBatchedQR) = QR.size
 Base.size(QR::CuBatchedQR, i::Integer) = QR.size[i]
-Base.eltype(::CuBatchedQR{T}) where {T} = T
 
 function Base.show(io::IO, QR::CuBatchedQR)
     return print(io, "CuBatchedQR() with Batch Count: $(nbatches(QR))")
@@ -75,6 +91,7 @@ function LinearAlgebra.qr!(A::CuUniformBlockDiagonalMatrix, ::NoPivot; kwargs...
     return CuBatchedQR{eltype(A)}(factors, τ, size(A))
 end
 
+# TODO: Handle Adjoint and Transpose for QR
 function LinearAlgebra.ldiv!(A::CuBatchedQR, b::CuMatrix)
     @assert nbatches(A) == nbatches(b)
     (; τ, factors) = A

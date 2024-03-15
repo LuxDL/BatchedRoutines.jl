@@ -84,10 +84,11 @@ end
                     @test Array(gs_fwddiff_x)≈Array(gs_rdiff[1]) atol=atol rtol=rtol
                     @test Array(gs_fwddiff_p)≈Array(gs_rdiff[2]) atol=atol rtol=rtol
 
-                    __f1 = x -> sum(
-                        abs2, batched_gradient(backend, simple_batched_function, x, p))
+                    __f1 = x -> sum(abs2,
+                        batched_gradient(backend, Base.Fix2(simple_batched_function, p), x))
                     __f2 = x -> sum(abs2,
-                        batched_gradient(backend, simple_batched_function, x, Array(p)))
+                        batched_gradient(
+                            backend, Base.Fix2(simple_batched_function, Array(p)), x))
 
                     gs_zyg_x = only(Zygote.gradient(__f1, X))
                     gs_rdiff_x = ReverseDiff.gradient(__f2, Array(X))

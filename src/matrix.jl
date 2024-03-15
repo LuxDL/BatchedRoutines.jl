@@ -105,7 +105,6 @@ Base.@propagate_inbounds function Base.setindex!(
 end
 
 Base.@propagate_inbounds function Base.setindex!(A::UniformBlockDiagonalMatrix, v, idx::Int)
-    @show size(A)
     return setindex!(A, v, mod1(idx, size(A, 1)), (idx - 1) ÷ size(A, 1) + 1)
 end
 
@@ -129,6 +128,8 @@ function Base.Matrix(A::UniformBlockDiagonalMatrix)
     end
     return M
 end
+
+Base.Array(A::UniformBlockDiagonalMatrix) = Matrix(A)
 
 Base.collect(A::UniformBlockDiagonalMatrix) = Matrix(A)
 
@@ -265,36 +266,59 @@ function Base.:*(X::AbstractArray{T, 2}, Y::UniformBlockDiagonalMatrix) where {T
 end
 
 # LinearAlgebra
-abstract type AbstractBatchedMatrixFactorization end
+abstract type AbstractBatchedMatrixFactorization{T} <: LinearAlgebra.Factorization{T} end
 
-function LinearAlgebra.ldiv!(A::AbstractBatchedMatrixFactorization, b::AbstractVector)
-    return LinearAlgebra.ldiv!(A, reshape(b, :, nbatches(A)))
+const AdjointAbstractBatchedMatrixFactorization{T} = LinearAlgebra.AdjointFactorization{
+    T, <:AbstractBatchedMatrixFactorization{T}}
+const TransposeAbstractBatchedMatrixFactorization{T} = LinearAlgebra.TransposeFactorization{
+    T, <:AbstractBatchedMatrixFactorization{T}}
+const AdjointOrTransposeAbstractBatchedMatrixFactorization{T} = Union{
+    AdjointAbstractBatchedMatrixFactorization{T},
+    TransposeAbstractBatchedMatrixFactorization{T}}
+
+const AllAbstractBatchedMatrixFactorization{T} = Union{
+    AbstractBatchedMatrixFactorization{T},
+    AdjointOrTransposeAbstractBatchedMatrixFactorization{T}}
+
+nbatches(f::AdjointOrTransposeAbstractBatchedMatrixFactorization) = nbatches(parent(f))
+batchview(f::AdjointOrTransposeAbstractBatchedMatrixFactorization) = batchview(parent(f))
+function batchview(f::AdjointOrTransposeAbstractBatchedMatrixFactorization, idx::Int)
+    return batchview(parent(f), idx)
+end
+
+function LinearAlgebra.ldiv!(A::AllAbstractBatchedMatrixFactorization, b::AbstractVector)
+    LinearAlgebra.ldiv!(A, reshape(b, :, nbatches(A)))
+    return b
 end
 
 function LinearAlgebra.ldiv!(
-        X::AbstractVector, A::AbstractBatchedMatrixFactorization, b::AbstractVector)
+        X::AbstractVector, A::AllAbstractBatchedMatrixFactorization, b::AbstractVector)
     LinearAlgebra.ldiv!(reshape(X, :, nbatches(A)), A, reshape(b, :, nbatches(A)))
     return X
 end
 
-function LinearAlgebra.:\(A::AbstractBatchedMatrixFactorization, b::AbstractVector)
+function LinearAlgebra.:\(A::AllAbstractBatchedMatrixFactorization, b::AbstractVector)
     X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
     LinearAlgebra.ldiv!(X, A, b)
     return X
 end
 
-function LinearAlgebra.:\(A::AbstractBatchedMatrixFactorization, b::AbstractMatrix)
+function LinearAlgebra.:\(A::AllAbstractBatchedMatrixFactorization, b::AbstractMatrix)
     X = similar(b, promote_type(eltype(A), eltype(b)), size(A, 1))
     LinearAlgebra.ldiv!(X, A, vec(b))
     return reshape(X, :, nbatches(b))
 end
 
-struct GenericBatchedFactorization{A, F} <: AbstractBatchedMatrixFactorization
+struct GenericBatchedFactorization{T, A, F} <: AbstractBatchedMatrixFactorization{T}
     alg::A
     fact::Vector{F}
 
-    function GenericBatchedFactorization(alg::A, fact::Vector{F}) where {A, F}
-        return new{A, F}(alg, fact)
+    function GenericBatchedFactorization(alg, fact)
+        return GenericBatchedFactorization{eltype(first(fact))}(alg, fact)
+    end
+
+    function GenericBatchedFactorization{T}(alg::A, fact::Vector{F}) where {T, A, F}
+        return new{T, A, F}(alg, fact)
     end
 end
 
@@ -305,10 +329,13 @@ Base.size(F::GenericBatchedFactorization) = size(first(F.fact)) .* length(F.fact
 function Base.size(F::GenericBatchedFactorization, i::Integer)
     return size(first(F.fact), i) * length(F.fact)
 end
-Base.eltype(F::GenericBatchedFactorization) = eltype(first(F.fact))
 
 function LinearAlgebra.issuccess(fact::GenericBatchedFactorization)
     return all(LinearAlgebra.issuccess, fact.fact)
+end
+
+function Base.adjoint(fact::GenericBatchedFactorization{T}) where {T}
+    return GenericBatchedFactorization{T}(fact.alg, adjoint.(fact.fact))
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::GenericBatchedFactorization)
