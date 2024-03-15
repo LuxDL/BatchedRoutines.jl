@@ -127,3 +127,10 @@ _assert_loaded_backend(::AutoFiniteDiff) = @assert _is_extension_loaded(Val(:Fin
 _assert_loaded_backend(::AutoZygote) = @assert _is_extension_loaded(Val(:Zygote))
 
 CRC.@non_differentiable _assert_loaded_backend(::Any...)
+
+# Chunksize remove
+_maybe_remove_chunksize(ad, x) = ad
+function _maybe_remove_chunksize(ad::AutoAllForwardDiff{CK}, x) where {CK}
+    (CK === nothing || CK ≤ 0 || CK ≤ length(x)) && return ad
+    return parameterless_type(ad)()
+end

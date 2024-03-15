@@ -75,9 +75,12 @@ function CRC.rrule(::typeof(batched_gradient), ad, f::F, x, p) where {F}
         ∂x = _jacobian_vector_product(
             AutoForwardDiff(), @closure(x->batched_gradient(ad, Base.Fix2(f, p), x)),
             x, reshape(Δ, size(x)))
-        ∂p = _jacobian_vector_product(
-            AutoForwardDiff(), @closure((x, p)->batched_gradient(ad, Base.Fix1(f, x), p)),
-            x, reshape(Δ, size(x)), p)
+        ∂p = _jacobian_vector_product(AutoForwardDiff(),
+            @closure((x, p)->batched_gradient(
+                _maybe_remove_chunksize(ad, p), Base.Fix1(f, x), p)),
+            x,
+            reshape(Δ, size(x)),
+            p)
         return NoTangent(), NoTangent(), NoTangent(), ∂x, ∂p
     end
     return dx, ∇batched_gradient

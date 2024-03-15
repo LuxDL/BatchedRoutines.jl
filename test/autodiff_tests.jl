@@ -16,8 +16,11 @@
             J_fdiff = batched_jacobian(
                 AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
             J_fwdiff = batched_jacobian(AutoForwardDiff(), simple_batched_function, X, p)
+            J_fwdiff2 = batched_jacobian(
+                AutoForwardDiff(; chunksize=2), simple_batched_function, X, p)
 
             @test Matrix(J_fdiff)≈Matrix(J_fwdiff) atol=1e-3
+            @test Matrix(J_fwdiff)≈Matrix(J_fwdiff2)
         end
     end
 end
@@ -63,23 +66,18 @@ end
                             AutoZygote(), simple_batched_function, Array(X), p)),
                     Array(p))
 
-                for backend in (
-                # AutoFiniteDiff(), # FIXME: FiniteDiff doesn't work well with ForwardDiff
-                # AutoForwardDiff(), # FIXME: The return type doesn't match
-                # AutoReverseDiff(), # FIXME: ReverseDiff with ForwardDiff problematic
-                    AutoZygote(),)
-                    arrType = backend isa AutoFiniteDiff || backend isa AutoReverseDiff ?
-                              Array : identity
+                @testset "backend: $(backend)" for backend in (
+                    # AutoFiniteDiff(), # FIXME: FiniteDiff doesn't work well with ForwardDiff
+                    AutoForwardDiff(), AutoForwardDiff(; chunksize=3),
+                    # AutoReverseDiff(), # FIXME: ReverseDiff with ForwardDiff problematic
+                    AutoZygote())
+                    (!(backend isa AutoZygote) && ongpu) && continue
 
-                    gs_zyg = Zygote.gradient(
-                        (x, p) -> sum(
-                            abs2, batched_gradient(backend, simple_batched_function, x, p)),
-                        arrType(X),
-                        arrType(p))
-                    gs_rdiff = ReverseDiff.gradient(
-                        (x, p) -> sum(
-                            abs2, batched_gradient(backend, simple_batched_function, x, p)),
-                        (Array(X), Array(p)))
+                    __f = (x, p) -> sum(
+                        abs2, batched_gradient(backend, simple_batched_function, x, p))
+
+                    gs_zyg = Zygote.gradient(__f, X, p)
+                    gs_rdiff = ReverseDiff.gradient(__f, (Array(X), Array(p)))
 
                     @test Array(gs_fwddiff_x)≈Array(gs_zyg[1]) atol=1e-3
                     @test Array(gs_fwddiff_p)≈Array(gs_zyg[2]) atol=1e-3

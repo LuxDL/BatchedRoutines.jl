@@ -151,7 +151,10 @@ end
     if CK === nothing || CK ≤ 0
         push!(calls, :(ck = ForwardDiff.Chunk{ForwardDiff.pickchunksize(length(u))}()))
     else
-        push!(calls, :(ck = ForwardDiff.Chunk{CK}()))
+        push!(calls, quote
+            @assert CK ≤ length(u) "Chunk size must be ≤ the length of u"
+            ck = ForwardDiff.Chunk{CK}()
+        end)
     end
     push!(calls, :(return _forwarddiff_gradient(f, u, typeof(tag), ck)))
     return Expr(:block, calls...)
@@ -165,22 +168,25 @@ function _forwarddiff_gradient(f::F, u::AbstractArray{T}, ::Type{Tag},
     Dual = ForwardDiff.Dual{Tag, T, CK}
     Partials = ForwardDiff.Partials{CK, T}
 
-    gs = similar(u)
-    for i in 1:nchunks
-        _forwarddiff_gradient!(gs, (i - 1) * CK + 1, ck, Tag, Dual, Partials, f, u)
+    gs_first = _forwarddiff_gradient!!(nothing, 1, ck, Tag, Dual, Partials, f, u)
+    gs_ = similar(u, eltype(gs_first), size(u))
+    gs = vec(gs_)
+    gs[1:CK] .= gs_first
+    for i in 2:nchunks
+        _forwarddiff_gradient!!(gs, (i - 1) * CK + 1, ck, Tag, Dual, Partials, f, u)
     end
 
     if remainder > 0
         Dual_rem = ForwardDiff.Dual{Tag, T, remainder}
         Partials_rem = ForwardDiff.Partials{remainder, T}
-        _forwarddiff_gradient!(gs, nchunks * CK + 1, ForwardDiff.Chunk{remainder}(),
+        _forwarddiff_gradient!!(gs, nchunks * CK + 1, ForwardDiff.Chunk{remainder}(),
             Tag, Dual_rem, Partials_rem, f, u)
     end
 
-    return gs
+    return gs_
 end
 
-@views function _forwarddiff_gradient!(
+@views function _forwarddiff_gradient!!(
         gs, idx::Int, ::ForwardDiff.Chunk{CK}, ::Type{Tag}, ::Type{Dual},
         ::Type{Partials}, f::F, u::AbstractArray{T}) where {CK, Tag, Dual, Partials, F, T}
     N = length(u)
@@ -210,6 +216,7 @@ end
     u_duals = reshape(vcat(u_part_prev, u_part_duals, u_part_next), size(u))
     y_duals = f(u_duals)
 
+    gs === nothing && return ForwardDiff.partials(y_duals)
     gs[idxs] .= ForwardDiff.partials(y_duals)
     return
 end
@@ -220,7 +227,8 @@ Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{
 function BatchedRoutines._jacobian_vector_product(ad::AutoForwardDiff, f::F, x, u) where {F}
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
     T = promote_type(eltype(x), eltype(u))
-    partials = ForwardDiff.Partials{1, T}.(tuple.(u))
+    dev = get_device(x)
+    partials = ForwardDiff.Partials{1, T}.(tuple.(u)) |> dev
     x_dual = ForwardDiff.Dual{Tag, T, 1}.(x, partials)
     y_dual = f(x_dual)
     return ForwardDiff.partials.(y_dual, 1)
@@ -230,7 +238,8 @@ function BatchedRoutines._jacobian_vector_product(
         ad::AutoForwardDiff, f::F, x, u, p) where {F}
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
     T = promote_type(eltype(x), eltype(u))
-    partials = ForwardDiff.Partials{1, T}.(tuple.(u))
+    dev = get_device(x)
+    partials = ForwardDiff.Partials{1, T}.(tuple.(u)) |> dev
     x_dual = ForwardDiff.Dual{Tag, T, 1}.(x, partials)
     y_dual = f(x_dual, p)
     return ForwardDiff.partials.(y_dual, 1)
