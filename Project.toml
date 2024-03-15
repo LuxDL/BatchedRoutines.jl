@@ -60,6 +60,7 @@ Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 LuxCUDA = "d0bbae9a-e099-4d5b-a835-1c6931763bda"
 LuxDeviceUtils = "34f89e08-e1d5-43b4-8944-0b49ac560553"
 LuxTestUtils = "ac9de150-d08f-4546-94fb-7472b5760531"
@@ -71,4 +72,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "FiniteDiff", "ForwardDiff", "LuxCUDA", "LuxDeviceUtils", "LuxTestUtils", "Random", "ReTestItems", "ReverseDiff", "StableRNGs", "Test", "Zygote"]
+test = ["Aqua", "ExplicitImports", "FiniteDiff", "ForwardDiff", "LinearSolve", "LuxCUDA", "LuxDeviceUtils", "LuxTestUtils", "Random", "ReTestItems", "ReverseDiff", "StableRNGs", "Test", "Zygote"]

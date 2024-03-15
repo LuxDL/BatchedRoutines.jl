@@ -70,6 +70,11 @@ function CRC.rrule(::typeof(batched_gradient), ad, f::F, x, p) where {F}
         throw(ArgumentError("`ForwardDiff.jl` needs to be loaded to compute the gradient \
                              of `batched_gradient`."))
 
+    if ad isa AutoForwardDiff && get_device(x) isa LuxDeviceUtils.AbstractLuxGPUDevice
+        @warn "`rrule` of `batched_gradient($(ad))` might fail on GPU. Consider using \
+               `AutoZygote` instead." maxlog=1
+    end
+
     dx = batched_gradient(ad, f, x, p)
     ∇batched_gradient = @closure Δ -> begin
         ∂x = _jacobian_vector_product(

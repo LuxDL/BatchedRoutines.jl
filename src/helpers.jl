@@ -134,3 +134,16 @@ function _maybe_remove_chunksize(ad::AutoAllForwardDiff{CK}, x) where {CK}
     (CK === nothing || CK ≤ 0 || CK ≤ length(x)) && return ad
     return parameterless_type(ad)()
 end
+
+# Figure out the type of the gradient
+@inline function _resolve_gradient_type(f::F, g::G, x, ::Val{depth}) where {F, G, depth}
+    Base.issingletontype(f) && return (eltype(x), false)
+    return promote_type(eltype(x), eltype(g(x))), true
+end
+@inline function _resolve_gradient_type(
+        f::Union{Base.Fix1, Base.Fix2}, g::G, x, ::Val{depth}) where {G, depth}
+    depth ≥ 5 && return promote_type(eltype(x), eltype(f(x))), true
+    T, resolved = _resolve_gradient_type(f.f, g, x, Val(depth + 1))
+    resolved && return T, true
+    return promote_type(T, eltype(f.x)), false
+end

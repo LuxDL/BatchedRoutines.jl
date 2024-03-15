@@ -16,7 +16,18 @@ Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:ReverseDiff.Tr
 Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{<:ReverseDiff.TrackedReal}})=false
 
 function BatchedRoutines._batched_gradient(::AutoReverseDiff, f::F, u) where {F}
-    return ReverseDiff.gradient(f, u)
+    Base.issingletontype(f) && return ReverseDiff.gradient(f, u)
+
+    ∂u = similar(u, first(BatchedRoutines._resolve_gradient_type(f, f, u, Val(1))))
+    fill!(∂u, false)
+
+    tape = ReverseDiff.InstructionTape()
+    u_tracked = ReverseDiff.TrackedArray(u, ∂u, tape)
+    y_tracked = f(u_tracked)
+    y_tracked.deriv = true
+    ReverseDiff.reverse_pass!(tape)
+
+    return ∂u
 end
 
 # Chain rules integration
@@ -49,10 +60,10 @@ ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
     ad, f, x::ReverseDiff.TrackedArray, p::ReverseDiff.TrackedArray)
 
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
-    ad, f, x, p::ReverseDiff.TrackedArray)
+    ad, f, x::AbstractArray, p::ReverseDiff.TrackedArray)
 
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_jacobian(
-    ad, f, x::ReverseDiff.TrackedArray, p)
+    ad, f, x::ReverseDiff.TrackedArray, p::AbstractArray)
 
 function BatchedRoutines.batched_gradient(
         ad, f::F, x::AbstractArray{<:ReverseDiff.TrackedReal}) where {F}
@@ -83,9 +94,9 @@ ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
     ad, f, x::ReverseDiff.TrackedArray, p::ReverseDiff.TrackedArray)
 
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
-    ad, f, x, p::ReverseDiff.TrackedArray)
+    ad, f, x::AbstractArray, p::ReverseDiff.TrackedArray)
 
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
-    ad, f, x::ReverseDiff.TrackedArray, p)
+    ad, f, x::ReverseDiff.TrackedArray, p::AbstractArray)
 
 end

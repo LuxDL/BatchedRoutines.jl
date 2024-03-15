@@ -10,7 +10,7 @@ import PrecompileTools: @recompile_invalidations
     using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
     using ConcreteStructs: @concrete
     using FastClosures: @closure
-    using FillArrays: Fill
+    using FillArrays: Fill, OneElement
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!, pinv
     using LuxDeviceUtils: LuxDeviceUtils, get_device

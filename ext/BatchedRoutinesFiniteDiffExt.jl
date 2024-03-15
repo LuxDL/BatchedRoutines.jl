@@ -32,7 +32,8 @@ end
 
 # NOTE: This doesn't exploit batching
 @inline function BatchedRoutines._batched_gradient(ad::AutoFiniteDiff, f::F, x) where {F}
-    return FiniteDiff.finite_difference_gradient(f, x, ad.fdjtype)
+    returntype = first(BatchedRoutines._resolve_gradient_type(f, f, x, Val(1)))
+    return FiniteDiff.finite_difference_gradient(f, x, ad.fdjtype, returntype)
 end
 
 # TODO: For the gradient call just use FiniteDiff over FiniteDiff
