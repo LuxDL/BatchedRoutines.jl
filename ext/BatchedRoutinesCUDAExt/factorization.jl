@@ -1,3 +1,4 @@
+# LU Factorization
 @concrete struct CuBatchedLU{T} <: AbstractBatchedMatrixFactorization
     factors
     pivot_array
@@ -43,6 +44,57 @@ function LinearAlgebra.ldiv!(A::CuBatchedLU, b::CuMatrix)
 end
 
 function LinearAlgebra.ldiv!(X::CuMatrix, A::CuBatchedLU, b::CuMatrix)
+    copyto!(X, b)
+    return LinearAlgebra.ldiv!(A, X)
+end
+
+# QR Factorization
+@concrete struct CuBatchedQR{T} <: AbstractBatchedMatrixFactorization
+    factors
+    τ
+    size
+end
+
+BatchedRoutines.nbatches(QR::CuBatchedQR) = length(QR.factors)
+BatchedRoutines.batchview(QR::CuBatchedQR) = zip(QR.factors, QR.τ)
+BatchedRoutines.batchview(QR::CuBatchedQR, idx::Int) = QR.factors[idx], QR.τ[idx]
+Base.size(QR::CuBatchedQR) = QR.size
+Base.size(QR::CuBatchedQR, i::Integer) = QR.size[i]
+Base.eltype(::CuBatchedQR{T}) where {T} = T
+
+function Base.show(io::IO, QR::CuBatchedQR)
+    return print(io, "CuBatchedQR() with Batch Count: $(nbatches(QR))")
+end
+
+function LinearAlgebra.qr!(::CuUniformBlockDiagonalMatrix, ::ColumnNorm; kwargs...)
+    throw(ArgumentError("ColumnNorm is not supported for batched CUDA QR factorization!"))
+end
+
+function LinearAlgebra.qr!(A::CuUniformBlockDiagonalMatrix, ::NoPivot; kwargs...)
+    τ, factors = CUBLAS.geqrf_batched!(collect(batchview(A)))
+    return CuBatchedQR{eltype(A)}(factors, τ, size(A))
+end
+
+function LinearAlgebra.ldiv!(A::CuBatchedQR, b::CuMatrix)
+    @assert nbatches(A) == nbatches(b)
+    (; τ, factors) = A
+    n, m = size(A) .÷ nbatches(A)
+    # TODO: Threading?
+    for i in 1:nbatches(A)
+        CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i),
+            batchview(b, i))
+    end
+    vecX = [reshape(view(bᵢ, 1:m), :, 1) for bᵢ in batchview(b)]
+    if n != m
+        sqF = [F_[1:m, 1:m] for F_ in batchview(factors)]
+    else
+        sqF = collect(batchview(factors))
+    end
+    CUBLAS.trsm_batched!('L', 'U', 'N', 'N', one(eltype(A)), sqF, vecX)
+    return b
+end
+
+function LinearAlgebra.ldiv!(X::CuMatrix, A::CuBatchedQR, b::CuMatrix)
     copyto!(X, b)
     return LinearAlgebra.ldiv!(A, X)
 end

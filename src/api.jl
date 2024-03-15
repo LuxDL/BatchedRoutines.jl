@@ -89,11 +89,15 @@ Return a view of the `idx`-th batch of `A`. If `idx` is not supplied an iterator
 batches is returned.
 """
 batchview(A::AbstractArray, idx::Int) = selectdim(A, ndims(A), idx)
-function batchview(A::AbstractVector, idx::Int)
-    return idx ≥ 2 && throw(BoundsError(batchview(A), idx))
+function batchview(A::AbstractVector{T}, idx::Int) where {T}
+    if isbitstype(T)
+        idx ≥ 2 && throw(BoundsError(batchview(A), idx))
+        return A
+    end
+    return A[idx]
 end
 batchview(A::AbstractArray) = eachslice(A; dims=ndims(A))
-batchview(A::AbstractVector) = (A,)
+batchview(A::AbstractVector{T}) where {T} = isbitstype(T) ? (A,) : A
 
 """
     batched_pinv(A::AbstractArray{T, 3}) where {T}

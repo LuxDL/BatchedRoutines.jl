@@ -2,7 +2,8 @@ module BatchedRoutinesCUDAExt
 
 using BatchedRoutines: AbstractBatchedMatrixFactorization, BatchedRoutines,
                        UniformBlockDiagonalMatrix, batchview, nbatches
-using CUDA: CUBLAS, CUDA, CuArray, CuMatrix, CuPtr, CuVector, DenseCuArray, DenseCuMatrix
+using CUDA: CUBLAS, CUDA, CUSOLVER, CuArray, CuMatrix, CuPtr, CuVector, DenseCuArray,
+            DenseCuMatrix
 using ConcreteStructs: @concrete
 using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero, mul!
 

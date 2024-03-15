@@ -3,7 +3,7 @@
 
     rng = get_stable_rng(1001)
 
-    @testset "$mode" for (mode, aType, device, ongpu) in MODES
+    @testset "$mode" for (mode, aType, dev, ongpu) in MODES
         simple_batched_function = function (X, p)
             X_ = reshape(X, :, nbatches(X))
             return sum(abs2, X_ .* p; dims=1) .- sum(abs, X_ .* p; dims=1) .+ p .^ 2
@@ -30,7 +30,7 @@ end
 
     rng = get_stable_rng(1001)
 
-    @testset "$mode" for (mode, aType, device, ongpu) in MODES
+    @testset "$mode" for (mode, aType, dev, ongpu) in MODES
         simple_batched_function = function (X, p)
             X_ = reshape(X, :, nbatches(X))
             return sum(
