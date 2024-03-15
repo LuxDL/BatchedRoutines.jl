@@ -88,37 +88,4 @@ ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
 ReverseDiff.@grad_from_chainrules BatchedRoutines.batched_gradient(
     ad, f, x::ReverseDiff.TrackedArray, p)
 
-@concrete struct ReverseDiffPullbackFunction <: Function
-    tape
-    ∂input
-    output
-end
-
-function (pb_f::ReverseDiffPullbackFunction)(Δ)
-    if pb_f.output isa AbstractArray{<:ReverseDiff.TrackedReal}
-        @inbounds for (oᵢ, Δᵢ) in zip(vec(pb_f.output), vec(Δ))
-            oᵢ.deriv = Δᵢ
-        end
-    else
-        vec(pb_f.output.deriv) .= vec(Δ)
-    end
-    ReverseDiff.reverse_pass!(pb_f.tape)
-    return pb_f.∂input
-end
-
-function BatchedRoutines._value_and_pullback(::AutoReverseDiff, f::F, x) where {F}
-    tape = ReverseDiff.InstructionTape()
-    ∂x = zero(x)
-    x_tracked = ReverseDiff.TrackedArray(x, ∂x, tape)
-    y_tracked = f(x_tracked)
-
-    if y_tracked isa AbstractArray{<:ReverseDiff.TrackedReal}
-        y = ReverseDiff.value.(y_tracked)
-    else
-        y = ReverseDiff.value(y_tracked)
-    end
-
-    return y, ReverseDiffPullbackFunction(tape, ∂x, y_tracked)
-end
-
 end

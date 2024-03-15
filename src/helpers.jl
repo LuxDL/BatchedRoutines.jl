@@ -117,7 +117,6 @@ end
 # Useful for computing the gradient of a gradient
 function _jacobian_vector_product end
 function _vector_jacobian_product end
-function _value_and_pullback end
 function _batched_jacobian end
 function _batched_gradient end
 

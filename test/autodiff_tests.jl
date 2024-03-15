@@ -9,32 +9,16 @@
             return sum(abs2, X_ .* p; dims=1) .- sum(abs, X_ .* p; dims=1) .+ p .^ 2
         end
 
-        X = randn(rng, 3, 2, 4) |> aType
-        p = randn(rng, 6) |> aType
+        Xs = (aType(randn(rng, 3, 2, 4)), aType(randn(rng, 2, 4)), aType(randn(rng, 3)))
+        ps = (aType(randn(rng, 6)), aType(randn(rng, 2)), aType(randn(rng, 3)))
 
-        J_fdiff = batched_jacobian(
-            AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
-        J_fwdiff = batched_jacobian(AutoForwardDiff(), simple_batched_function, X, p)
+        for (X, p) in zip(Xs, ps)
+            J_fdiff = batched_jacobian(
+                AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
+            J_fwdiff = batched_jacobian(AutoForwardDiff(), simple_batched_function, X, p)
 
-        @test Matrix(J_fdiff)≈Matrix(J_fwdiff) atol=1e-3
-
-        X = randn(rng, 2, 4) |> aType
-        p = randn(rng, 2) |> aType
-
-        J_fdiff = batched_jacobian(
-            AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
-        J_fwdiff = batched_jacobian(AutoForwardDiff(), simple_batched_function, X, p)
-
-        @test Matrix(J_fdiff)≈Matrix(J_fwdiff) atol=1e-3
-
-        X = randn(rng, 3) |> aType
-        p = randn(rng, 3) |> aType
-
-        J_fdiff = batched_jacobian(
-            AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
-        J_fwdiff = batched_jacobian(AutoForwardDiff(), simple_batched_function, X, p)
-
-        @test Matrix(J_fdiff)≈Matrix(J_fwdiff) atol=1e-3
+            @test Matrix(J_fdiff)≈Matrix(J_fwdiff) atol=1e-3
+        end
     end
 end
 
@@ -50,46 +34,24 @@ end
                 abs2, sum(abs2, X_ .* p; dims=1) .- sum(abs, X_ .* p; dims=1) .+ p .^ 2)
         end
 
-        X = randn(rng, 3, 2, 4) |> aType
-        p = randn(rng, 6) |> aType
+        Xs = (aType(randn(rng, 3, 2, 4)), aType(randn(rng, 2, 4)), aType(randn(rng, 3)))
+        ps = (aType(randn(rng, 6)), aType(randn(rng, 2)), aType(randn(rng, 3)))
 
-        gs_fdiff = batched_gradient(
-            AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
-        gs_fwdiff = batched_gradient(AutoForwardDiff(), simple_batched_function, X, p)
-        gs_rdiff = batched_gradient(
-            AutoReverseDiff(), simple_batched_function, Array(X), Array(p))
-        gs_zygote = batched_gradient(AutoZygote(), simple_batched_function, X, p)
+        for (X, p) in zip(Xs, ps)
+            gs_fdiff = batched_gradient(
+                AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
+            gs_fwdiff = batched_gradient(AutoForwardDiff(), simple_batched_function, X, p)
+            gs_rdiff = batched_gradient(
+                AutoReverseDiff(), simple_batched_function, Array(X), Array(p))
+            gs_zygote = batched_gradient(AutoZygote(), simple_batched_function, X, p)
 
-        @test Array(gs_fdiff)≈Array(gs_fwdiff) atol=1e-3
-        @test Array(gs_fwdiff)≈Array(gs_rdiff) atol=1e-3
-        @test Array(gs_rdiff)≈Array(gs_zygote) atol=1e-3
+            @test Array(gs_fdiff)≈Array(gs_fwdiff) atol=1e-3
+            @test Array(gs_fwdiff)≈Array(gs_rdiff) atol=1e-3
+            @test Array(gs_rdiff)≈Array(gs_zygote) atol=1e-3
+        end
 
-        X = randn(rng, 2, 4) |> aType
-        p = randn(rng, 2) |> aType
-
-        gs_fdiff = batched_gradient(
-            AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
-        gs_fwdiff = batched_gradient(AutoForwardDiff(), simple_batched_function, X, p)
-        gs_rdiff = batched_gradient(
-            AutoReverseDiff(), simple_batched_function, Array(X), Array(p))
-        gs_zygote = batched_gradient(AutoZygote(), simple_batched_function, X, p)
-
-        @test Array(gs_fdiff)≈Array(gs_fwdiff) atol=1e-3
-        @test Array(gs_fwdiff)≈Array(gs_rdiff) atol=1e-3
-        @test Array(gs_rdiff)≈Array(gs_zygote) atol=1e-3
-
-        X = randn(rng, 3) |> aType
-        p = randn(rng, 3) |> aType
-
-        J_fdiff = batched_gradient(
-            AutoFiniteDiff(), simple_batched_function, Array(X), Array(p))
-        J_fwdiff = batched_gradient(AutoForwardDiff(), simple_batched_function, X, p)
-        J_rdiff = batched_gradient(
-            AutoReverseDiff(), simple_batched_function, Array(X), Array(p))
-        J_zygote = batched_gradient(AutoZygote(), simple_batched_function, X, p)
-
-        @test Array(J_fdiff)≈Array(J_fwdiff) atol=1e-3
-        @test Array(J_fwdiff)≈Array(J_rdiff) atol=1e-3
-        @test Array(J_rdiff)≈Array(J_zygote) atol=1e-3
+        @testset "Gradient of Gradient" begin
+            
+        end
     end
 end

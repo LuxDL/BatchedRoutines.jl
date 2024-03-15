@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/LuxDL/BatchedRoutines.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/LuxDL/BatchedRoutines.jl/actions/workflows/CI.yml)
 [![Build status](https://img.shields.io/buildkite/ba1f9622add5978c2d7b194563fd9327113c9c21e5734be20e/main.svg?label=gpu)](https://buildkite.com/julialang/lux-dot-jl)
-[![codecov](https://codecov.io/gh/LuxDL/BatchedRoutines.jl/branch/main/graph/badge.svg?token=IMqBM1e3hz)](https://codecov.io/gh/LuxDL/BatchedRoutines.jl.jl)
+[![codecov](https://codecov.io/gh/LuxDL/BatchedRoutines.jl/branch/main/graph/badge.svg?token=IMqBM1e3hz)](https://codecov.io/gh/LuxDL/BatchedRoutines.jl)
 [![Package Downloads](https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/BatchedRoutines)](https://pkgs.genieframework.com?packages=BatchedRoutines)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
