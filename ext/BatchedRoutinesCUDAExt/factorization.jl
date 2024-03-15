@@ -79,10 +79,8 @@ function LinearAlgebra.ldiv!(A::CuBatchedQR, b::CuMatrix)
     @assert nbatches(A) == nbatches(b)
     (; τ, factors) = A
     n, m = size(A) .÷ nbatches(A)
-    # TODO: Threading?
     for i in 1:nbatches(A)
-        CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i),
-            batchview(b, i))
+        CUSOLVER.ormqr!('L', 'C', batchview(factors, i), batchview(τ, i), batchview(b, i))
     end
     vecX = [reshape(view(bᵢ, 1:m), :, 1) for bᵢ in batchview(b)]
     if n != m
@@ -95,8 +93,10 @@ function LinearAlgebra.ldiv!(A::CuBatchedQR, b::CuMatrix)
 end
 
 function LinearAlgebra.ldiv!(X::CuMatrix, A::CuBatchedQR, b::CuMatrix)
-    copyto!(X, b)
-    return LinearAlgebra.ldiv!(A, X)
+    @assert size(X, 1) ≤ size(b, 1)
+    b_ = LinearAlgebra.ldiv!(A, copy(b))
+    copyto!(X, view(b_, 1:size(X, 1), :))
+    return X
 end
 
 # Low Level Wrappers

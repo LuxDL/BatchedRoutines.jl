@@ -152,7 +152,7 @@ end
         push!(calls, :(ck = ForwardDiff.Chunk{ForwardDiff.pickchunksize(length(u))}()))
     else
         push!(calls, quote
-            @assert CK ≤ length(u) "Chunk size must be ≤ the length of u"
+            @assert CK≤length(u) "Chunk size must be ≤ the length of u"
             ck = ForwardDiff.Chunk{CK}()
         end)
     end
