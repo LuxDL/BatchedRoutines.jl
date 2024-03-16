@@ -52,3 +52,60 @@
         end
     end
 end
+
+@testitem "Simple Lux Integration" setup=[SharedTestSetup] begin
+    using ComponentArrays, ForwardDiff, Lux, Random, Zygote
+
+    rng = get_stable_rng(1001)
+
+    @testset "$mode" for (mode, aType, dev, ongpu) in MODES
+        model = Chain(Dense(4 => 6, tanh), Dense(6 => 3))
+        ps, st = Lux.setup(rng, model)
+        ps = ComponentArray(ps) |> dev
+        st = st |> dev
+
+        x = randn(rng, 4, 3) |> dev
+        y = randn(rng, 4, 3) |> dev
+        target_jac = batched_jacobian(
+            AutoForwardDiff(; chunksize=4), StatefulLuxLayer(model, nothing, st), y, ps)
+
+        loss_function = (model, x, target_jac, ps, st) -> begin
+            m = StatefulLuxLayer(model, nothing, st)
+            jac_full = batched_jacobian(AutoForwardDiff(; chunksize=4), m, x, ps)
+            return sum(abs2, jac_full .- target_jac)
+        end
+
+        @test loss_function(model, x, target_jac, ps, st) isa Number
+        @test !iszero(loss_function(model, x, target_jac, ps, st))
+
+        cdev = cpu_device()
+        _fn_x = x -> loss_function(model, x, target_jac |> cdev, ps |> cdev, st)
+        _fn_ps = p -> loss_function(
+            model, x |> cdev, target_jac |> cdev, ComponentArray(p, getaxes(ps)), st)
+
+        ∂x_fdiff = ForwardDiff.gradient(_fn_x, cdev(x))
+        ∂ps_fdiff = ForwardDiff.gradient(_fn_ps, cdev(ps))
+
+        _, ∂x, _, ∂ps, _ = Zygote.gradient(loss_function, model, x, target_jac, ps, st)
+
+        @test cdev(∂x) ≈ ∂x_fdiff
+        @test cdev(∂ps) ≈ ∂ps_fdiff
+
+        loss_function2 = (model, x, target_jac, ps, st) -> begin
+            m = StatefulLuxLayer(model, ps, st)
+            jac_full = batched_jacobian(AutoForwardDiff(; chunksize=4), m, x)
+            return sum(abs2, jac_full .- target_jac)
+        end
+
+        @test loss_function2(model, x, target_jac, ps, st) isa Number
+        @test !iszero(loss_function2(model, x, target_jac, ps, st))
+
+        _fn_x = x -> loss_function2(model, x, cdev(target_jac), cdev(ps), st)
+
+        ∂x_fdiff = ForwardDiff.gradient(_fn_x, cdev(x))
+
+        _, ∂x, _, _, _ = Zygote.gradient(loss_function2, model, x, target_jac, ps, st)
+
+        @test cdev(∂x) ≈ ∂x_fdiff
+    end
+end

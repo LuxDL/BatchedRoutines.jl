@@ -149,6 +149,23 @@ function Base.fill!(A::UniformBlockDiagonalMatrix, v)
     return A
 end
 
+@inline function _eachrow(X::UniformBlockDiagonalMatrix)
+    row_fn = @closure i -> begin
+        M, N, K = size(X.data)
+        k = (i - 1) ÷ M + 1
+        i_ = mod1(i, M)
+        data = view(X.data, i_, :, k)
+        if k == 1
+            return vcat(data, zeros_like(data, N * (K - 1)))
+        elseif k == K
+            return vcat(zeros_like(data, N * (K - 1)), data)
+        else
+            return vcat(zeros_like(data, N * (k - 1)), data, zeros_like(data, N * (K - k)))
+        end
+    end
+    return map(row_fn, 1:size(X, 1))
+end
+
 # Broadcasting
 struct UniformBlockDiagonalMatrixStyle{N} <: Broadcast.AbstractArrayStyle{2} end
 

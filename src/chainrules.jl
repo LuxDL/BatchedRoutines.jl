@@ -1,9 +1,3 @@
-function __batched_value_and_jacobian(ad, f::F, x) where {F}
-    J = batched_jacobian(ad, f, x)
-    return f(x), J
-end
-
-# TODO: Use OneElement for this
 function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x::AbstractMatrix) where {F}
     if !_is_extension_loaded(Val(:ForwardDiff)) || !_is_extension_loaded(Val(:Zygote))
         throw(ArgumentError("`ForwardDiff.jl` and `Zygote.jl` needs to be loaded to \
@@ -15,9 +9,8 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x::AbstractMatrix) wher
     ∇batched_jacobian = Δ -> begin
         gradient_ad = AutoZygote()
         _map_fnₓ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
-            x -> batched_gradient(gradient_ad, x_ -> sum(vec(f(x_))[i:i]), x),
-            x, reshape(Δᵢ, size(x)))
-        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(eachrow(Δ))), size(x))
+            x -> batched_gradient(gradient_ad, x_ -> sum(vec(f(x_))[i:i]), x), x, Δᵢ)
+        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(_eachrow(Δ))), size(x))
         return NoTangent(), NoTangent(), NoTangent(), ∂x
     end
     return J, ∇batched_jacobian
@@ -33,16 +26,15 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
 
     ∇batched_jacobian = Δ -> begin
         _map_fnₓ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
-            x -> batched_gradient(AutoZygote(), x_ -> sum(vec(f(x_, p))[i:i]), x),
-            x, reshape(Δᵢ, size(x)))
+            x -> batched_gradient(AutoZygote(), x_ -> sum(vec(f(x_, p))[i:i]), x), x, Δᵢ)
 
-        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(eachrow(Δ))), size(x))
+        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(_eachrow(Δ))), size(x))
 
         _map_fnₚ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
             (x, p_) -> batched_gradient(AutoZygote(), p__ -> sum(vec(f(x, p__))[i:i]), p_),
-            x, reshape(Δᵢ, size(x)), p)
+            x, Δᵢ, p)
 
-        ∂p = reshape(mapreduce(_map_fnₚ, +, enumerate(eachrow(Δ))), size(p))
+        ∂p = reshape(mapreduce(_map_fnₚ, +, enumerate(_eachrow(Δ))), size(p))
 
         return NoTangent(), NoTangent(), NoTangent(), ∂x, ∂p
     end

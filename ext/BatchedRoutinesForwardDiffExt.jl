@@ -65,7 +65,7 @@ end
     return ForwardDiff.value.(y_duals), J_partial
 end
 
-function BatchedRoutines.__batched_value_and_jacobian(
+function __batched_value_and_jacobian(
         ad::AutoForwardDiff, f::F, u::AbstractMatrix{T},
         ck::Val{chunksize}) where {F, T, chunksize}
     N, B = size(u)
@@ -104,19 +104,19 @@ function BatchedRoutines.__batched_value_and_jacobian(
     return y, J
 end
 
-@generated function BatchedRoutines.__batched_value_and_jacobian(
+@generated function __batched_value_and_jacobian(
         ad::AutoForwardDiff{CK}, f::F, u::AbstractMatrix{T}) where {CK, F, T}
     if CK === nothing || CK ≤ 0
         if _assert_type(u) && Base.issingletontype(F)
             rType = Tuple{u, parameterless_type(u){T, 3}}
-            jac_call = :((y, J) = BatchedRoutines.__batched_value_and_jacobian(
+            jac_call = :((y, J) = __batched_value_and_jacobian(
                 ad, f, u, Val(batched_pickchunksize(u)))::$(rType))
         else # Cases like ReverseDiff over ForwardDiff
-            jac_call = :((y, J) = BatchedRoutines.__batched_value_and_jacobian(
+            jac_call = :((y, J) = __batched_value_and_jacobian(
                 ad, f, u, Val(batched_pickchunksize(u))))
         end
     else
-        jac_call = :((y, J) = BatchedRoutines.__batched_value_and_jacobian(
+        jac_call = :((y, J) = __batched_value_and_jacobian(
             ad, f, u, $(Val(CK))))
     end
     return Expr(:block, jac_call, :(return (y, UniformBlockDiagonalMatrix(J))))
@@ -140,7 +140,7 @@ end
 
 @inline function BatchedRoutines._batched_jacobian(
         ad::AutoForwardDiff, f::F, u::AbstractMatrix) where {F}
-    return last(BatchedRoutines.__batched_value_and_jacobian(ad, f, u))
+    return last(__batched_value_and_jacobian(ad, f, u))
 end
 
 # We don't use the ForwardDiff.gradient since it causes GPU compilation errors due to
@@ -226,10 +226,7 @@ Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{
 
 function BatchedRoutines._jacobian_vector_product(ad::AutoForwardDiff, f::F, x, u) where {F}
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
-    T = promote_type(eltype(x), eltype(u))
-    dev = get_device(x)
-    partials = ForwardDiff.Partials{1, T}.(tuple.(u)) |> dev
-    x_dual = ForwardDiff.Dual{Tag, T, 1}.(x, partials)
+    x_dual = _construct_jvp_duals(Tag, x, u)
     y_dual = f(x_dual)
     return ForwardDiff.partials.(y_dual, 1)
 end
@@ -237,12 +234,15 @@ end
 function BatchedRoutines._jacobian_vector_product(
         ad::AutoForwardDiff, f::F, x, u, p) where {F}
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
-    T = promote_type(eltype(x), eltype(u))
-    dev = get_device(x)
-    partials = ForwardDiff.Partials{1, T}.(tuple.(u)) |> dev
-    x_dual = ForwardDiff.Dual{Tag, T, 1}.(x, partials)
+    x_dual = _construct_jvp_duals(Tag, x, u)
     y_dual = f(x_dual, p)
     return ForwardDiff.partials.(y_dual, 1)
+end
+
+@inline function _construct_jvp_duals(::Type{Tag}, x, u) where {Tag}
+    T = promote_type(eltype(x), eltype(u))
+    partials = ForwardDiff.Partials{1, T}.(tuple.(u))
+    return ForwardDiff.Dual{Tag, T, 1}.(x, reshape(partials, size(x)))
 end
 
 end

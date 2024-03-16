@@ -147,3 +147,23 @@ end
     resolved && return T, true
     return promote_type(T, eltype(f.x)), false
 end
+
+# eachrow override
+@inline _eachrow(X) = eachrow(X)
+
+# MLUtils.jl has too many unwanted dependencies
+@inline fill_like(x::AbstractArray, v, ::Type{T}, dims...) where {T} = fill!(
+    similar(x, T, dims...), v)
+@inline fill_like(x::AbstractArray, v, dims...) = fill_like(x, v, eltype(x), dims...)
+
+@inline zeros_like(x::AbstractArray, ::Type{T}, dims...) where {T} = fill_like(
+    x, zero(T), T, dims...)
+@inline zeros_like(x::AbstractArray, dims...) = zeros_like(x, eltype(x), dims...)
+
+@inline ones_like(x::AbstractArray, ::Type{T}, dims...) where {T} = fill_like(
+    x, one(T), T, dims...)
+@inline ones_like(x::AbstractArray, dims...) = ones_like(x, eltype(x), dims...)
+
+CRC.@non_differentiable fill_like(::Any...)
+CRC.@non_differentiable zeros_like(::Any...)
+CRC.@non_differentiable ones_like(::Any...)
