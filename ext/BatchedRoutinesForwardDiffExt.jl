@@ -65,8 +65,7 @@ end
     return ForwardDiff.value.(y_duals), J_partial
 end
 
-function __batched_value_and_jacobian(
-        ad::AutoForwardDiff, f::F, u::AbstractMatrix{T},
+function __batched_value_and_jacobian(ad::AutoForwardDiff, f::F, u::AbstractMatrix{T},
         ck::Val{chunksize}) where {F, T, chunksize}
     N, B = size(u)
 
@@ -116,8 +115,7 @@ end
                 ad, f, u, Val(batched_pickchunksize(u))))
         end
     else
-        jac_call = :((y, J) = __batched_value_and_jacobian(
-            ad, f, u, $(Val(CK))))
+        jac_call = :((y, J) = __batched_value_and_jacobian(ad, f, u, $(Val(CK))))
     end
     return Expr(:block, jac_call, :(return (y, UniformBlockDiagonalMatrix(J))))
 end
