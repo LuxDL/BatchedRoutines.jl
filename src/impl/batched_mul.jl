@@ -14,12 +14,12 @@ end
 
 @inline function _batched_mul!(C::BatchedVector{T}, A::BatchedMatrix, B::BatchedVector,
         α::Number=one(T), β::Number=zero(T)) where {T}
-    _batched_mul!(reshape(C, :, 1), A, reshape(B, :, 1), α, β)
+    _batched_mul!(reshape(C, :, 1, nbatches(C)), A, reshape(B, :, 1, nbatches(B)), α, β)
     return C
 end
 @inline function _batched_mul!(C::BatchedMatrix{T}, A::BatchedVector, B::BatchedMatrix,
         α::Number=one(T), β::Number=zero(T)) where {T}
-    _batched_mul!(C, reshape(A, :, 1), B, α, β)
+    _batched_mul!(C, reshape(A, :, 1, nbatches(A)), B, α, β)
     return C
 end
 
