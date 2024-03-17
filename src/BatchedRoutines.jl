@@ -11,9 +11,10 @@ import PrecompileTools: @recompile_invalidations
     using ConcreteStructs: @concrete
     using FastClosures: @closure
     using FillArrays: Fill, OneElement
-    using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
-                         mul!, pinv
+    using LinearAlgebra: BLAS, ColumnNorm, I, LinearAlgebra, NoPivot, RowMaximum,
+                         RowNonZero, axpby!, axpy!, mul!, norm, pinv
     using LuxDeviceUtils: LuxDeviceUtils, get_device
+    using Printf: @printf
 end
 
 const CRC = ChainRulesCore
@@ -30,6 +31,8 @@ include("api.jl")
 include("helpers.jl")
 include("matrix.jl")
 
+include("internal.jl")
+
 include("impl/batched_mul.jl")
 include("impl/batched_gmres.jl")
 
@@ -37,11 +40,11 @@ include("chainrules.jl")
 
 export AutoFiniteDiff, AutoForwardDiff, AutoReverseDiff, AutoZygote
 export batched_adjoint, batched_gradient, batched_jacobian, batched_pickchunksize,
-       batched_mul, batched_pinv, batched_transpose
+       batched_mul, batched_norm, batched_pinv, batched_transpose
 export batchview, nbatches
 export UniformBlockDiagonalMatrix
 
-# TODO: Ship a custom GMRES routine & if needed some of the other complex nonlinear solve
-#       routines
+# Special Solvers
+export BatchedGmresSolver, batched_gmres, batched_gmres!
 
 end

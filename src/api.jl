@@ -55,8 +55,6 @@ TODO: Needs Documentation (take from NNlib.jl)
 """
 batched_mul(A, B) = _batched_mul(A, B)
 
-batched_mul!(C, A, B) = _batched_mul!(C, A, B)
-
 """
     batched_transpose(X::AbstractArray{T, 3}) where {T}
 
@@ -128,3 +126,8 @@ Reshape `x` into a matrix with the batch dimension as the last dimension.
 Reshape `x` into an array with the batch dimension as the last dimension.
 """
 @inline batched_reshape(x::AbstractArray, dims...) = reshape(x, dims..., nbatches(x))
+
+@inline function batched_norm(x::AbstractMatrix; drop::Val{D}=Val(true)) where {D}
+    y = sqrt.(sum(abs2, x; dims=1))
+    return D ? dropdims(y; dims=1) : y
+end

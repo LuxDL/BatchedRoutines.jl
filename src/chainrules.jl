@@ -50,8 +50,7 @@ function CRC.rrule(::typeof(batched_gradient), ad, f::F, x) where {F}
     dx = batched_gradient(ad, f, x)
     ∇batched_gradient = @closure Δ -> begin
         ∂x = _jacobian_vector_product(
-            AutoForwardDiff(), @closure(x->batched_gradient(ad, f, x)),
-            x, reshape(Δ, size(x)))
+            AutoForwardDiff(), @closure(x->batched_gradient(ad, f, x)), x, Δ)
         return NoTangent(), NoTangent(), NoTangent(), ∂x
     end
     return dx, ∇batched_gradient
@@ -70,14 +69,10 @@ function CRC.rrule(::typeof(batched_gradient), ad, f::F, x, p) where {F}
     dx = batched_gradient(ad, f, x, p)
     ∇batched_gradient = @closure Δ -> begin
         ∂x = _jacobian_vector_product(
-            AutoForwardDiff(), @closure(x->batched_gradient(ad, Base.Fix2(f, p), x)),
-            x, reshape(Δ, size(x)))
+            AutoForwardDiff(), @closure(x->batched_gradient(ad, Base.Fix2(f, p), x)), x, Δ)
+        ad_ = _maybe_remove_chunksize(ad, p)
         ∂p = _jacobian_vector_product(AutoForwardDiff(),
-            @closure((x, p)->batched_gradient(
-                _maybe_remove_chunksize(ad, p), Base.Fix1(f, x), p)),
-            x,
-            reshape(Δ, size(x)),
-            p)
+            @closure((x, p)->batched_gradient(ad_, Base.Fix1(f, x), p)), x, Δ, p)
         return NoTangent(), NoTangent(), NoTangent(), ∂x, ∂p
     end
     return dx, ∇batched_gradient
