@@ -282,6 +282,14 @@ function Base.:*(X::AbstractArray{T, 2}, Y::UniformBlockDiagonalMatrix) where {T
     return dropdims(C.data; dims=1)
 end
 
+function LinearAlgebra.mul!(A::AbstractMatrix, B::AbstractMatrix,
+        C::UniformBlockDiagonalMatrix, α::Number=true, β::Number=false)
+    A_ = reshape(A, 1, :, nbatches(A))
+    B_ = reshape(B, 1, :, nbatches(B))
+    batched_mul!(A_, B_, C.data, α, β)
+    return A
+end
+
 # LinearAlgebra
 abstract type AbstractBatchedMatrixFactorization{T} <: LinearAlgebra.Factorization{T} end
 

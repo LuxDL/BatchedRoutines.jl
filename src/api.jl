@@ -55,7 +55,7 @@ TODO: Needs Documentation (take from NNlib.jl)
 """
 batched_mul(A, B) = _batched_mul(A, B)
 
-batched_mul!(C, A, B) = _batched_mul!(C, A, B)
+batched_mul!(C, A, B, α = true, β = false) = _batched_mul!(C, A, B, α, β)
 
 """
     batched_transpose(X::AbstractArray{T, 3}) where {T}
