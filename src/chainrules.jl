@@ -115,6 +115,14 @@ function CRC.rrule(::typeof(*), X::UniformBlockDiagonalMatrix{<:Union{Real, Comp
     return X * Y, ∇times
 end
 
+function CRC.rrule(cfg::CRC.RuleConfig{>:CRC.HasReverseMode}, ::typeof(*),
+        X::AbstractMatrix{<:Union{Real, Complex}},
+        Y::UniformBlockDiagonalMatrix{<:Union{Real, Complex}})
+    _f = @closure (x, y) -> dropdims(
+        batched_mul(reshape(x, :, 1, nbatches(x)), y.data); dims=1)
+    return CRC.rrule_via_ad(cfg, _f, X, Y)
+end
+
 # constructor
 function CRC.rrule(::Type{<:UniformBlockDiagonalMatrix}, data)
     function ∇UniformBlockDiagonalMatrix(Δ)
