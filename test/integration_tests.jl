@@ -5,7 +5,7 @@
 
     @testset "$mode" for (mode, aType, dev, ongpu) in MODES
         for dims in ((8, 8, 2), (5, 3, 2))
-            A1 = UniformBlockDiagonalMatrix(rand(rng, dims...)) |> dev
+            A1 = UniformBlockDiagonalOperator(rand(rng, dims...)) |> dev
             A2 = Matrix(A1) |> dev
             b = rand(rng, size(A1, 1)) |> dev
 

@@ -148,9 +148,6 @@ end
     return promote_type(T, eltype(f.x)), false
 end
 
-# eachrow override
-@inline _eachrow(X) = eachrow(X)
-
 # MLUtils.jl has too many unwanted dependencies
 @inline fill_like(x::AbstractArray, v, ::Type{T}, dims...) where {T} = fill!(
     similar(x, T, dims...), v)

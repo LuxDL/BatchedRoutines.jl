@@ -101,40 +101,18 @@ function CRC.rrule(::typeof(_batched_mul), A::AbstractArray{T1, 3},
     return batched_mul(A, B), ∇batched_mul
 end
 
-function CRC.rrule(::typeof(*), X::UniformBlockDiagonalMatrix{<:Union{Real, Complex}},
-        Y::AbstractMatrix{<:Union{Real, Complex}})
-    function ∇times(_Δ)
-        Δ = CRC.unthunk(_Δ)
-        ∂X = CRC.@thunk(Δ*batched_adjoint(batched_reshape(Y, :, 1)))
-        ∂Y = CRC.@thunk begin
-            res = (X' * Δ)
-            Y isa UniformBlockDiagonalMatrix ? res : dropdims(res.data; dims=2)
-        end
-        return (NoTangent(), ∂X, ∂Y)
-    end
-    return X * Y, ∇times
-end
-
-function CRC.rrule(cfg::CRC.RuleConfig{>:CRC.HasReverseMode}, ::typeof(*),
-        X::AbstractMatrix{<:Union{Real, Complex}},
-        Y::UniformBlockDiagonalMatrix{<:Union{Real, Complex}})
-    _f = @closure (x, y) -> dropdims(
-        batched_mul(reshape(x, :, 1, nbatches(x)), y.data); dims=1)
-    return CRC.rrule_via_ad(cfg, _f, X, Y)
-end
-
 # constructor
-function CRC.rrule(::Type{<:UniformBlockDiagonalMatrix}, data)
-    function ∇UniformBlockDiagonalMatrix(Δ)
-        ∂data = Δ isa UniformBlockDiagonalMatrix ? Δ.data :
+function CRC.rrule(::Type{<:UniformBlockDiagonalOperator}, data)
+    function ∇UniformBlockDiagonalOperator(Δ)
+        ∂data = Δ isa UniformBlockDiagonalOperator ? getdata(Δ) :
                 (Δ isa NoTangent ? NoTangent() : Δ)
         return (NoTangent(), ∂data)
     end
-    return UniformBlockDiagonalMatrix(data), ∇UniformBlockDiagonalMatrix
+    return UniformBlockDiagonalOperator(data), ∇UniformBlockDiagonalOperator
 end
 
-function CRC.rrule(::typeof(getproperty), A::UniformBlockDiagonalMatrix, x::Symbol)
+function CRC.rrule(::typeof(getproperty), op::UniformBlockDiagonalOperator, x::Symbol)
     @assert x === :data
-    ∇getproperty(Δ) = (NoTangent(), UniformBlockDiagonalMatrix(Δ))
-    return A.data, ∇getproperty
+    ∇getproperty(Δ) = (NoTangent(), UniformBlockDiagonalOperator(Δ))
+    return op.data, ∇getproperty
 end

@@ -28,14 +28,14 @@ end
 
 for pT in (:RowMaximum, :RowNonZero, :NoPivot)
     @eval begin
-        function LinearAlgebra.lu!(A::CuUniformBlockDiagonalMatrix, pivot::$pT; kwargs...)
+        function LinearAlgebra.lu!(A::CuUniformBlockDiagonalOperator, pivot::$pT; kwargs...)
             return LinearAlgebra.lu!(A, !(pivot isa NoPivot); kwargs...)
         end
     end
 end
 
 function LinearAlgebra.lu!(
-        A::CuUniformBlockDiagonalMatrix, pivot::Bool=true; check::Bool=true, kwargs...)
+        A::CuUniformBlockDiagonalOperator, pivot::Bool=true; check::Bool=true, kwargs...)
     pivot_array, info_, factors = CUBLAS.getrf_strided_batched!(A.data, pivot)
     info = Array(info_)
     check && LinearAlgebra.checknonsingular.(info)
@@ -82,11 +82,15 @@ function Base.show(io::IO, QR::CuBatchedQR)
     return print(io, "CuBatchedQR() with Batch Count: $(nbatches(QR))")
 end
 
-function LinearAlgebra.qr!(::CuUniformBlockDiagonalMatrix, ::ColumnNorm; kwargs...)
+function LinearAlgebra.qr!(A::CuUniformBlockDiagonalOperator; kwargs...)
+    return LinearAlgebra.qr!(A, NoPivot(); kwargs...)
+end
+
+function LinearAlgebra.qr!(::CuUniformBlockDiagonalOperator, ::ColumnNorm; kwargs...)
     throw(ArgumentError("ColumnNorm is not supported for batched CUDA QR factorization!"))
 end
 
-function LinearAlgebra.qr!(A::CuUniformBlockDiagonalMatrix, ::NoPivot; kwargs...)
+function LinearAlgebra.qr!(A::CuUniformBlockDiagonalOperator, ::NoPivot; kwargs...)
     τ, factors = CUBLAS.geqrf_batched!(collect(batchview(A)))
     return CuBatchedQR{eltype(A)}(factors, τ, size(A))
 end

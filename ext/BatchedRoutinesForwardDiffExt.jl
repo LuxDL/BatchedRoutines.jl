@@ -2,7 +2,7 @@ module BatchedRoutinesForwardDiffExt
 
 using ADTypes: AutoForwardDiff
 using ArrayInterface: parameterless_type
-using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalMatrix, batched_jacobian,
+using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalOperator, batched_jacobian,
                        batched_mul, batched_pickchunksize, _assert_type
 using ChainRulesCore: ChainRulesCore
 using FastClosures: @closure
@@ -117,7 +117,7 @@ end
     else
         jac_call = :((y, J) = __batched_value_and_jacobian(ad, f, u, $(Val(CK))))
     end
-    return Expr(:block, jac_call, :(return (y, UniformBlockDiagonalMatrix(J))))
+    return Expr(:block, jac_call, :(return (y, UniformBlockDiagonalOperator(J))))
 end
 
 ## Exposed API
@@ -132,8 +132,8 @@ end
     end
     J = ForwardDiff.jacobian(f, u, cfg)
     (_assert_type(f) && _assert_type(u) && Base.issingletontype(F)) &&
-        (return UniformBlockDiagonalMatrix(J::parameterless_type(u){T, 2}))
-    return UniformBlockDiagonalMatrix(J)
+        (return UniformBlockDiagonalOperator(J::parameterless_type(u){T, 2}))
+    return UniformBlockDiagonalOperator(J)
 end
 
 @inline function BatchedRoutines._batched_jacobian(
