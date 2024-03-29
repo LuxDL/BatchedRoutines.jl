@@ -14,14 +14,14 @@ import PrecompileTools: @recompile_invalidations
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!, pinv
     using LuxDeviceUtils: LuxDeviceUtils, get_device
-    using SciMLOperators: AbstractSciMLOperator
+    using SciMLOperators: SciMLOperators, AbstractSciMLOperator
 end
 
 function __init__()
     @static if isdefined(Base.Experimental, :register_error_hint)
         Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
             if any(Base.Fix2(isa, UniformBlockDiagonalOperator), exc.args)
-                print(io, "\nHINT: ")
+                printstyled(io, "\nHINT: "; bold=true)
                 printstyled(
                     io, "`UniformBlockDiagonalOperator` doesn't support AbstractArray \
                          operations. If you want this supported open an issue at \

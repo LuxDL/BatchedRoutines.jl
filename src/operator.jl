@@ -6,6 +6,10 @@ function UniformBlockDiagonalOperator(X::AbstractMatrix)
     return UniformBlockDiagonalOperator(reshape(X, size(X, 1), size(X, 2), 1))
 end
 
+# SciMLOperators Interface
+## Even though it is easily convertible, it is helpful to get warnings
+SciMLOperators.isconvertible(::UniformBlockDiagonalOperator) = false
+
 # BatchedRoutines API
 getdata(op::UniformBlockDiagonalOperator) = op.data
 nbatches(op::UniformBlockDiagonalOperator) = size(op.data, 3)
@@ -170,6 +174,25 @@ end
 
 @inline function Base.copy(op::UniformBlockDiagonalOperator)
     return UniformBlockDiagonalOperator(copy(getdata(op)))
+end
+
+## Define some of the common operations like `sum` directly since SciMLOperators doesn't
+## use a very nice implemented
+@inline function Base.sum(op::UniformBlockDiagonalOperator; kwargs...)
+    return sum(identity, op; kwargs...)
+end
+
+@inline function Base.sum(f::F, op::UniformBlockDiagonalOperator; dims=Colon()) where {F}
+    return mapreduce(f, +, op; dims)
+end
+
+## Common Operations
+function Base.:+(op1::UniformBlockDiagonalOperator, op2::UniformBlockDiagonalOperator)
+    return UniformBlockDiagonalOperator(getdata(op1) + getdata(op2))
+end
+
+function Base.:-(op1::UniformBlockDiagonalOperator, op2::UniformBlockDiagonalOperator)
+    return UniformBlockDiagonalOperator(getdata(op1) - getdata(op2))
 end
 
 # Adapt

@@ -72,7 +72,7 @@ end
         loss_function = (model, x, target_jac, ps, st) -> begin
             m = StatefulLuxLayer(model, nothing, st)
             jac_full = batched_jacobian(AutoForwardDiff(; chunksize=4), m, x, ps)
-            return sum(abs2, jac_full .- target_jac)
+            return sum(abs2, jac_full - target_jac)
         end
 
         @test loss_function(model, x, target_jac, ps, st) isa Number
@@ -94,7 +94,7 @@ end
         loss_function2 = (model, x, target_jac, ps, st) -> begin
             m = StatefulLuxLayer(model, ps, st)
             jac_full = batched_jacobian(AutoForwardDiff(; chunksize=4), m, x)
-            return sum(abs2, jac_full .- target_jac)
+            return sum(abs2, jac_full - target_jac)
         end
 
         @test loss_function2(model, x, target_jac, ps, st) isa Number
