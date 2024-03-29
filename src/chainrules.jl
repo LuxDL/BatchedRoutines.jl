@@ -116,3 +116,32 @@ function CRC.rrule(::typeof(getproperty), op::UniformBlockDiagonalOperator, x::S
     ∇getproperty(Δ) = (NoTangent(), UniformBlockDiagonalOperator(Δ))
     return op.data, ∇getproperty
 end
+
+# mapreduce fallback rules for UniformBlockDiagonalOperator
+@inline _unsum(x, dy, dims) = broadcast(last ∘ tuple, x, dy)
+@inline _unsum(x, dy, ::Colon) = broadcast(last ∘ tuple, x, Ref(dy))
+
+function CRC.rrule(::typeof(sum), ::typeof(abs2), op::UniformBlockDiagonalOperator{T};
+        dims=:) where {T <: Union{Real, Complex}}
+    y = sum(abs2, op; dims)
+    ∇sum_abs2 = @closure Δ -> begin
+        ∂op = if dims isa Colon
+            UniformBlockDiagonalOperator(2 .* real.(Δ) .* getdata(op))
+        else
+            UniformBlockDiagonalOperator(2 .* real.(getdata(Δ)) .* getdata(op))
+        end
+        return NoTangent(), NoTangent(), ∂op
+    end
+    return y, ∇sum_abs2
+end
+
+function CRC.rrule(::typeof(sum), ::typeof(identity), op::UniformBlockDiagonalOperator{T};
+        dims=:) where {T <: Union{Real, Complex}}
+    y = sum(abs2, op; dims)
+    project = CRC.ProjectTo(getdata(op))
+    ∇sum_abs2 = @closure Δ -> begin
+        ∂op = project(_unsum(getdata(op), getdata(Δ), dims))
+        return NoTangent(), NoTangent(), UniformBlockDiagonalOperator(∂op)
+    end
+    return y, ∇sum_abs2
+end

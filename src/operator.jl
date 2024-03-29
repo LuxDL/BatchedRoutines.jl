@@ -12,6 +12,7 @@ SciMLOperators.isconvertible(::UniformBlockDiagonalOperator) = false
 
 # BatchedRoutines API
 getdata(op::UniformBlockDiagonalOperator) = op.data
+getdata(x) = x
 nbatches(op::UniformBlockDiagonalOperator) = size(op.data, 3)
 batchview(op::UniformBlockDiagonalOperator) = batchview(op.data)
 batchview(op::UniformBlockDiagonalOperator, i::Int) = batchview(op.data, i)
