@@ -86,16 +86,12 @@ end
 # batched_mul rrule
 function CRC.rrule(::typeof(_batched_mul), A::AbstractArray{T1, 3},
         B::AbstractArray{T2, 3}) where {T1, T2}
-    function ∇batched_mul(_Δ)
+    ∇batched_mul = @closure _Δ -> begin
         Δ = CRC.unthunk(_Δ)
-        ∂A = CRC.@thunk begin
-            tmp = batched_mul(Δ, batched_adjoint(B))
-            size(A, 3) == 1 ? sum(tmp; dims=3) : tmp
-        end
-        ∂B = CRC.@thunk begin
-            tmp = batched_mul(batched_adjoint(A), Δ)
-            size(B, 3) == 1 ? sum(tmp; dims=3) : tmp
-        end
+        tmpA = batched_mul(Δ, batched_adjoint(B))
+        ∂A = size(A, 3) == 1 ? sum(tmpA; dims=3) : tmpA
+        tmpB = batched_mul(batched_adjoint(A), Δ)
+        ∂B = size(B, 3) == 1 ? sum(tmpB; dims=3) : tmpB
         return (NoTangent(), ∂A, ∂B)
     end
     return batched_mul(A, B), ∇batched_mul
@@ -103,7 +99,7 @@ end
 
 # constructor
 function CRC.rrule(::Type{<:UniformBlockDiagonalOperator}, data)
-    function ∇UniformBlockDiagonalOperator(Δ)
+    ∇UniformBlockDiagonalOperator = @closure Δ -> begin
         ∂data = Δ isa UniformBlockDiagonalOperator ? getdata(Δ) :
                 (Δ isa NoTangent ? NoTangent() : Δ)
         return (NoTangent(), ∂data)
@@ -113,7 +109,7 @@ end
 
 function CRC.rrule(::typeof(getproperty), op::UniformBlockDiagonalOperator, x::Symbol)
     @assert x === :data
-    ∇getproperty(Δ) = (NoTangent(), UniformBlockDiagonalOperator(Δ))
+    ∇getproperty = @closure Δ -> (NoTangent(), UniformBlockDiagonalOperator(Δ))
     return op.data, ∇getproperty
 end
 

@@ -82,18 +82,19 @@ function Base.show(io::IO, mime::MIME"text/plain", F::GenericBatchedFactorizatio
     show(io, mime, first(F.fact))
 end
 
-for fact in (:qr, :lu, :cholesky)
+for fact in (:qr, :lu, :cholesky, :generic_lufact, :svd)
     fact! = Symbol(fact, :!)
-    @eval begin
-        function LinearAlgebra.$(fact)(op::UniformBlockDiagonalOperator, args...; kwargs...)
+    if isdefined(LinearAlgebra, fact)
+        @eval function LinearAlgebra.$(fact)(
+                op::UniformBlockDiagonalOperator, args...; kwargs...)
             return LinearAlgebra.$(fact!)(copy(op), args...; kwargs...)
         end
+    end
 
-        function LinearAlgebra.$(fact!)(
-                op::UniformBlockDiagonalOperator, args...; kwargs...)
-            fact = map(Aᵢ -> LinearAlgebra.$(fact!)(Aᵢ, args...; kwargs...), batchview(op))
-            return GenericBatchedFactorization(LinearAlgebra.$(fact!), fact)
-        end
+    @eval function LinearAlgebra.$(fact!)(
+            op::UniformBlockDiagonalOperator, args...; kwargs...)
+        fact = map(Aᵢ -> LinearAlgebra.$(fact!)(Aᵢ, args...; kwargs...), batchview(op))
+        return GenericBatchedFactorization(LinearAlgebra.$(fact!), fact)
     end
 end
 

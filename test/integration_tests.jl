@@ -1,5 +1,5 @@
 @testitem "LinearSolve" setup=[SharedTestSetup] begin
-    using FiniteDiff, LinearSolve, Zygote
+    using FiniteDiff, LinearAlgebra, LinearSolve, Zygote
 
     rng = get_stable_rng(1001)
 
@@ -13,12 +13,26 @@
             prob2 = LinearProblem(A2, b)
 
             if dims[1] == dims[2]
-                solvers = [LUFactorization(), QRFactorization(), KrylovJL_GMRES()]
+                solvers = [LUFactorization(), QRFactorization(),
+                    KrylovJL_GMRES(), svd_factorization(mode), nothing]
             else
-                solvers = [QRFactorization(), KrylovJL_LSMR()]
+                solvers = [
+                    QRFactorization(), KrylovJL_LSMR(), NormalCholeskyFactorization(),
+                    QRFactorization(LinearAlgebra.ColumnNorm()),
+                    svd_factorization(mode), nothing]
             end
 
-            @testset "solver: $(solver)" for solver in solvers
+            @testset "solver: $(nameof(typeof(solver)))" for solver in solvers
+                # FIXME: SVD doesn't define ldiv on CUDA side
+                if mode == "CUDA"
+                    @show solver, solver isa SVDFactorization
+                    if solver isa SVDFactorization || (solver isa QRFactorization &&
+                        solver.pivot isa LinearAlgebra.ColumnNorm)
+                        # ColumnNorm is not implemented on CUDA
+                        continue
+                    end
+                end
+
                 x1 = solve(prob1, solver)
                 x2 = solve(prob2, solver)
                 @test x1.u ≈ x2.u
