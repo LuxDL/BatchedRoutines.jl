@@ -2,7 +2,7 @@ module BatchedRoutinesForwardDiffExt
 
 using ADTypes: AutoForwardDiff
 using ArrayInterface: parameterless_type
-using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalMatrix, batched_jacobian,
+using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalOperator, batched_jacobian,
                        batched_mul, batched_pickchunksize, _assert_type
 using ChainRulesCore: ChainRulesCore
 using FastClosures: @closure
@@ -117,7 +117,7 @@ end
     else
         jac_call = :((y, J) = __batched_value_and_jacobian(ad, f, u, $(Val(CK))))
     end
-    return Expr(:block, jac_call, :(return (y, UniformBlockDiagonalMatrix(J))))
+    return Expr(:block, jac_call, :(return (y, UniformBlockDiagonalOperator(J))))
 end
 
 ## Exposed API
@@ -132,8 +132,8 @@ end
     end
     J = ForwardDiff.jacobian(f, u, cfg)
     (_assert_type(f) && _assert_type(u) && Base.issingletontype(F)) &&
-        (return UniformBlockDiagonalMatrix(J::parameterless_type(u){T, 2}))
-    return UniformBlockDiagonalMatrix(J)
+        (return UniformBlockDiagonalOperator(J::parameterless_type(u){T, 2}))
+    return UniformBlockDiagonalOperator(J)
 end
 
 @inline function BatchedRoutines._batched_jacobian(
@@ -211,7 +211,7 @@ end
         u_part_next = Dual.(u[idxs_next], dev(Partials.(map(nt, 1:length(idxs_next)))))
     end
 
-    u_duals = reshape(vcat(u_part_prev, u_part_duals, u_part_next), size(u))
+    u_duals = BatchedRoutines._restructure(vcat(u_part_prev, u_part_duals, u_part_next), u)
     y_duals = f(u_duals)
 
     gs === nothing && return ForwardDiff.partials(y_duals)
@@ -224,7 +224,7 @@ Base.@assume_effects :total BatchedRoutines._assert_type(::Type{<:AbstractArray{
 
 function BatchedRoutines._jacobian_vector_product(ad::AutoForwardDiff, f::F, x, u) where {F}
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
-    x_dual = _construct_jvp_duals(Tag, x, u)
+    x_dual = BatchedRoutines._construct_jvp_duals(Tag, x, u)
     y_dual = f(x_dual)
     return ForwardDiff.partials.(y_dual, 1)
 end
@@ -232,12 +232,12 @@ end
 function BatchedRoutines._jacobian_vector_product(
         ad::AutoForwardDiff, f::F, x, u, p) where {F}
     Tag = ad.tag === nothing ? typeof(ForwardDiff.Tag(f, eltype(x))) : typeof(ad.tag)
-    x_dual = _construct_jvp_duals(Tag, x, u)
+    x_dual = BatchedRoutines._construct_jvp_duals(Tag, x, u)
     y_dual = f(x_dual, p)
     return ForwardDiff.partials.(y_dual, 1)
 end
 
-@inline function _construct_jvp_duals(::Type{Tag}, x, u) where {Tag}
+@inline function BatchedRoutines._construct_jvp_duals(::Type{Tag}, x, u) where {Tag}
     T = promote_type(eltype(x), eltype(u))
     partials = ForwardDiff.Partials{1, T}.(tuple.(u))
     return ForwardDiff.Dual{Tag, T, 1}.(x, reshape(partials, size(x)))

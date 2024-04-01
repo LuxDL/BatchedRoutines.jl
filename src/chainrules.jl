@@ -10,7 +10,7 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x::AbstractMatrix) wher
         gradient_ad = AutoZygote()
         _map_fnₓ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
             x -> batched_gradient(gradient_ad, x_ -> sum(vec(f(x_))[i:i]), x), x, Δᵢ)
-        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(_eachrow(Δ))), size(x))
+        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(eachrow(Δ))), size(x))
         return NoTangent(), NoTangent(), NoTangent(), ∂x
     end
     return J, ∇batched_jacobian
@@ -28,13 +28,13 @@ function CRC.rrule(::typeof(batched_jacobian), ad, f::F, x, p) where {F}
         _map_fnₓ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
             x -> batched_gradient(AutoZygote(), x_ -> sum(vec(f(x_, p))[i:i]), x), x, Δᵢ)
 
-        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(_eachrow(Δ))), size(x))
+        ∂x = reshape(mapreduce(_map_fnₓ, +, enumerate(eachrow(Δ))), size(x))
 
         _map_fnₚ = ((i, Δᵢ),) -> _jacobian_vector_product(AutoForwardDiff(),
             (x, p_) -> batched_gradient(AutoZygote(), p__ -> sum(vec(f(x, p__))[i:i]), p_),
             x, Δᵢ, p)
 
-        ∂p = reshape(mapreduce(_map_fnₚ, +, enumerate(_eachrow(Δ))), size(p))
+        ∂p = reshape(mapreduce(_map_fnₚ, +, enumerate(eachrow(Δ))), size(p))
 
         return NoTangent(), NoTangent(), NoTangent(), ∂x, ∂p
     end
@@ -86,55 +86,75 @@ end
 # batched_mul rrule
 function CRC.rrule(::typeof(_batched_mul), A::AbstractArray{T1, 3},
         B::AbstractArray{T2, 3}) where {T1, T2}
-    function ∇batched_mul(_Δ)
+    ∇batched_mul = @closure _Δ -> begin
         Δ = CRC.unthunk(_Δ)
-        ∂A = CRC.@thunk begin
-            tmp = batched_mul(Δ, batched_adjoint(B))
-            size(A, 3) == 1 ? sum(tmp; dims=3) : tmp
-        end
-        ∂B = CRC.@thunk begin
-            tmp = batched_mul(batched_adjoint(A), Δ)
-            size(B, 3) == 1 ? sum(tmp; dims=3) : tmp
-        end
+        tmpA = batched_mul(Δ, batched_adjoint(B))
+        ∂A = size(A, 3) == 1 ? sum(tmpA; dims=3) : tmpA
+        tmpB = batched_mul(batched_adjoint(A), Δ)
+        ∂B = size(B, 3) == 1 ? sum(tmpB; dims=3) : tmpB
         return (NoTangent(), ∂A, ∂B)
     end
     return batched_mul(A, B), ∇batched_mul
 end
 
-function CRC.rrule(::typeof(*), X::UniformBlockDiagonalMatrix{<:Union{Real, Complex}},
-        Y::AbstractMatrix{<:Union{Real, Complex}})
-    function ∇times(_Δ)
-        Δ = CRC.unthunk(_Δ)
-        ∂X = CRC.@thunk(Δ*batched_adjoint(batched_reshape(Y, :, 1)))
-        ∂Y = CRC.@thunk begin
-            res = (X' * Δ)
-            Y isa UniformBlockDiagonalMatrix ? res : dropdims(res.data; dims=2)
-        end
-        return (NoTangent(), ∂X, ∂Y)
-    end
-    return X * Y, ∇times
-end
-
-function CRC.rrule(cfg::CRC.RuleConfig{>:CRC.HasReverseMode}, ::typeof(*),
-        X::AbstractMatrix{<:Union{Real, Complex}},
-        Y::UniformBlockDiagonalMatrix{<:Union{Real, Complex}})
-    _f = @closure (x, y) -> dropdims(
-        batched_mul(reshape(x, :, 1, nbatches(x)), y.data); dims=1)
-    return CRC.rrule_via_ad(cfg, _f, X, Y)
-end
-
 # constructor
-function CRC.rrule(::Type{<:UniformBlockDiagonalMatrix}, data)
-    function ∇UniformBlockDiagonalMatrix(Δ)
-        ∂data = Δ isa UniformBlockDiagonalMatrix ? Δ.data :
+function CRC.rrule(::Type{<:UniformBlockDiagonalOperator}, data)
+    ∇UniformBlockDiagonalOperator = @closure Δ -> begin
+        ∂data = Δ isa UniformBlockDiagonalOperator ? getdata(Δ) :
                 (Δ isa NoTangent ? NoTangent() : Δ)
         return (NoTangent(), ∂data)
     end
-    return UniformBlockDiagonalMatrix(data), ∇UniformBlockDiagonalMatrix
+    return UniformBlockDiagonalOperator(data), ∇UniformBlockDiagonalOperator
 end
 
-function CRC.rrule(::typeof(getproperty), A::UniformBlockDiagonalMatrix, x::Symbol)
+function CRC.rrule(::typeof(getproperty), op::UniformBlockDiagonalOperator, x::Symbol)
     @assert x === :data
-    ∇getproperty(Δ) = (NoTangent(), UniformBlockDiagonalMatrix(Δ))
-    return A.data, ∇getproperty
+    ∇getproperty = @closure Δ -> (NoTangent(), UniformBlockDiagonalOperator(Δ))
+    return op.data, ∇getproperty
+end
+
+# mapreduce fallback rules for UniformBlockDiagonalOperator
+@inline _unsum(x, dy, dims) = broadcast(last ∘ tuple, x, dy)
+@inline _unsum(x, dy, ::Colon) = broadcast(last ∘ tuple, x, Ref(dy))
+
+function CRC.rrule(::typeof(sum), ::typeof(abs2), op::UniformBlockDiagonalOperator{T};
+        dims=:) where {T <: Union{Real, Complex}}
+    y = sum(abs2, op; dims)
+    ∇sum_abs2 = @closure Δ -> begin
+        ∂op = if dims isa Colon
+            UniformBlockDiagonalOperator(2 .* real.(Δ) .* getdata(op))
+        else
+            UniformBlockDiagonalOperator(2 .* real.(getdata(Δ)) .* getdata(op))
+        end
+        return NoTangent(), NoTangent(), ∂op
+    end
+    return y, ∇sum_abs2
+end
+
+function CRC.rrule(::typeof(sum), ::typeof(identity), op::UniformBlockDiagonalOperator{T};
+        dims=:) where {T <: Union{Real, Complex}}
+    y = sum(abs2, op; dims)
+    project = CRC.ProjectTo(getdata(op))
+    ∇sum_abs2 = @closure Δ -> begin
+        ∂op = project(_unsum(getdata(op), getdata(Δ), dims))
+        return NoTangent(), NoTangent(), UniformBlockDiagonalOperator(∂op)
+    end
+    return y, ∇sum_abs2
+end
+
+# Direct Ldiv
+function CRC.rrule(cfg::CRC.RuleConfig{>:CRC.HasReverseMode}, ::typeof(\),
+        op::UniformBlockDiagonalOperator, b::AbstractMatrix)
+    # We haven't implemented the rrule for least squares yet, direct AD through the code
+    size(op, 1) != size(op, 2) && return CRC.rrule_via_ad(cfg, __internal_backslash, op, b)
+    # TODO: reuse the factorization once, `factorize(op)` has been implemented
+    u = op \ b
+    proj_A = CRC.ProjectTo(getdata(op))
+    proj_b = CRC.ProjectTo(b)
+    ∇backslash = @closure ∂u -> begin
+        λ = op' \ ∂u
+        ∂A = -batched_mul(λ, batched_adjoint(reshape(u, :, 1, nbatches(u))))
+        return NoTangent(), UniformBlockDiagonalOperator(proj_A(∂A)), proj_b(λ)
+    end
+    return u, ∇backslash
 end

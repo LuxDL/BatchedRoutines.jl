@@ -3,7 +3,7 @@
     batched_jacobian(ad, f::F, x, p) where {F}
 
 Use the backend `ad` to compute the Jacobian of `f` at `x` in batched mode. Returns a
-[`UniformBlockDiagonalMatrix`](@ref) as the Jacobian.
+[`UniformBlockDiagonalOperator`](@ref) as the Jacobian.
 
 !!! warning
 
@@ -63,6 +63,7 @@ batched_mul!(C, A, B, α=true, β=false) = _batched_mul!(C, A, B, α, β)
 Transpose the first two dimensions of `X`.
 """
 batched_transpose(X::BatchedMatrix) = PermutedDimsArray(X, (2, 1, 3))
+batched_transpose(X::AbstractMatrix) = reshape(X, 1, size(X, 1), size(X, 2))
 
 """
     batched_adjoint(X::AbstractArray{T, 3}) where {T}
@@ -101,7 +102,7 @@ batchview(A::AbstractVector{T}) where {T} = isbitstype(T) ? (A,) : A
 
 """
     batched_pinv(A::AbstractArray{T, 3}) where {T}
-    batched_pinv(A::UniformBlockDiagonalMatrix)
+    batched_pinv(A::UniformBlockDiagonalOperator)
 
 Compute the pseudo-inverse of `A` in batched mode.
 """
@@ -109,7 +110,7 @@ Compute the pseudo-inverse of `A` in batched mode.
 
 """
     batched_inv(A::AbstractArray{T, 3}) where {T}
-    batched_inv(A::UniformBlockDiagonalMatrix)
+    batched_inv(A::UniformBlockDiagonalOperator)
 
 Compute the inverse of `A` in batched mode.
 """

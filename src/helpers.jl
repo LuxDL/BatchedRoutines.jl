@@ -119,6 +119,9 @@ function _jacobian_vector_product end
 function _vector_jacobian_product end
 function _batched_jacobian end
 function _batched_gradient end
+function _construct_jvp_duals end
+
+@inline _restructure(y, x) = reshape(y, size(x))
 
 # Test Loaded AD Backend
 _assert_loaded_backend(::AutoForwardDiff) = @assert _is_extension_loaded(Val(:ForwardDiff))
@@ -147,9 +150,6 @@ end
     resolved && return T, true
     return promote_type(T, eltype(f.x)), false
 end
-
-# eachrow override
-@inline _eachrow(X) = eachrow(X)
 
 # MLUtils.jl has too many unwanted dependencies
 @inline fill_like(x::AbstractArray, v, ::Type{T}, dims...) where {T} = fill!(
