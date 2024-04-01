@@ -18,6 +18,7 @@ SciMLOperators = "c0aeaf25-5076-4817-a8d5-81caf7dfa961"
 
 [weakdeps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
 FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
@@ -26,6 +27,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extensions]
 BatchedRoutinesCUDAExt = ["CUDA"]
+BatchedRoutinesComponentArraysForwardDiffExt = ["ComponentArrays", "ForwardDiff"]
 BatchedRoutinesCUDALinearSolveExt = ["CUDA", "LinearSolve"]
 BatchedRoutinesFiniteDiffExt = ["FiniteDiff"]
 BatchedRoutinesForwardDiffExt = ["ForwardDiff"]

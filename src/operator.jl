@@ -51,7 +51,7 @@ end
 end
 
 @inline function Base.:*(x::AbstractMatrix, op::UniformBlockDiagonalOperator)
-    return (reshape(x, :, 1, nbatches(x)) * op) |> (dropdims$(; dims=2))
+    return dropdims(reshape(x, :, 1, nbatches(x)) * op; dims=1)
 end
 
 @inline function Base.:*(x::AbstractArray{T, 3}, op::UniformBlockDiagonalOperator) where {T}
