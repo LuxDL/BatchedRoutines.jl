@@ -24,7 +24,7 @@ function __init__()
                 printstyled(io, "\nHINT: "; bold=true)
                 printstyled(
                     io, "`UniformBlockDiagonalOperator` doesn't support AbstractArray \
-                         operations. If you want this supported open an issue at \
+                         operations. If you want this supported, open an issue at \
                          https://github.com/LuxDL/BatchedRoutines.jl to discuss it.";
                     color=:cyan)
             end

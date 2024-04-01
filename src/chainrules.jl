@@ -141,3 +141,20 @@ function CRC.rrule(::typeof(sum), ::typeof(identity), op::UniformBlockDiagonalOp
     end
     return y, ∇sum_abs2
 end
+
+# Direct Ldiv
+function CRC.rrule(cfg::CRC.RuleConfig{>:CRC.HasReverseMode}, ::typeof(\),
+        op::UniformBlockDiagonalOperator, b::AbstractMatrix)
+    # We haven't implemented the rrule for least squares yet, direct AD through the code
+    size(op, 1) != size(op, 2) && return CRC.rrule_via_ad(cfg, __internal_backslash, op, b)
+    # TODO: reuse the factorization once, `factorize(op)` has been implemented
+    u = op \ b
+    proj_A = CRC.ProjectTo(getdata(op))
+    proj_b = CRC.ProjectTo(b)
+    ∇backslash = @closure ∂u -> begin
+        λ = op' \ ∂u
+        ∂A = -batched_mul(λ, batched_adjoint(reshape(u, :, 1, nbatches(u))))
+        return NoTangent(), UniformBlockDiagonalOperator(proj_A(∂A)), proj_b(λ)
+    end
+    return u, ∇backslash
+end

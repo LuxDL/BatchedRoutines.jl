@@ -196,6 +196,11 @@ function Base.:-(op1::UniformBlockDiagonalOperator, op2::UniformBlockDiagonalOpe
     return UniformBlockDiagonalOperator(getdata(op1) - getdata(op2))
 end
 
+function Base.isapprox(
+        op1::UniformBlockDiagonalOperator, op2::UniformBlockDiagonalOperator; kwargs...)
+    return isapprox(getdata(op1), getdata(op2); kwargs...)
+end
+
 # Adapt
 @inline function Adapt.adapt_structure(to, op::UniformBlockDiagonalOperator)
     return UniformBlockDiagonalOperator(Adapt.adapt(to, getdata(op)))
@@ -268,4 +273,16 @@ function LinearAlgebra.mul!(C::AbstractArray{T1, 3}, A::UniformBlockDiagonalOper
         B::AbstractArray{T2, 3}) where {T1, T2}
     batched_mul!(C, getdata(A), B)
     return C
+end
+
+# Direct \ operator
+function Base.:\(op::UniformBlockDiagonalOperator, b::AbstractVector)
+    return vec(op \ reshape(b, :, nbatches(op)))
+end
+Base.:\(op::UniformBlockDiagonalOperator, b::AbstractMatrix) = __internal_backslash(op, b)
+
+## This exists to allow a direct autodiff through the code. eg, for non-square systems
+@inline function __internal_backslash(op::UniformBlockDiagonalOperator, b::AbstractMatrix)
+    size(op, 1) != length(b) && throw(DimensionMismatch("size(op, 1) != length(b)"))
+    return mapfoldl(((Aᵢ, bᵢ),) -> Aᵢ \ bᵢ, hcat, zip(batchview(op), batchview(b)))
 end

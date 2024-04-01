@@ -26,6 +26,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extensions]
 BatchedRoutinesCUDAExt = ["CUDA"]
+BatchedRoutinesCUDALinearSolveExt = ["CUDA", "LinearSolve"]
 BatchedRoutinesFiniteDiffExt = ["FiniteDiff"]
 BatchedRoutinesForwardDiffExt = ["ForwardDiff"]
 BatchedRoutinesLinearSolveExt = ["LinearSolve"]

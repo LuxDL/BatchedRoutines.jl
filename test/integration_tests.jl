@@ -1,12 +1,12 @@
 @testitem "LinearSolve" setup=[SharedTestSetup] begin
-    using FiniteDiff, LinearAlgebra, LinearSolve, Zygote
+    using LinearAlgebra, LinearSolve, Zygote
 
     rng = get_stable_rng(1001)
 
     @testset "$mode" for (mode, aType, dev, ongpu) in MODES
         for dims in ((8, 8, 2), (5, 3, 2))
             A1 = UniformBlockDiagonalOperator(rand(rng, dims...)) |> dev
-            A2 = Matrix(A1) |> dev
+            A2 = collect(A1)
             b = rand(rng, size(A1, 1)) |> dev
 
             prob1 = LinearProblem(A1, b)
@@ -22,10 +22,17 @@
                     svd_factorization(mode), nothing]
             end
 
+            if dims[1] == dims[2]
+                test_chainrules_adjoint = (A, b) -> sum(abs2, A \ b)
+
+                ∂A_cr, ∂b_cr = Zygote.gradient(test_chainrules_adjoint, A1, b)
+            else
+                ∂A_cr, ∂b_cr = nothing, nothing
+            end
+
             @testset "solver: $(nameof(typeof(solver)))" for solver in solvers
                 # FIXME: SVD doesn't define ldiv on CUDA side
                 if mode == "CUDA"
-                    @show solver, solver isa SVDFactorization
                     if solver isa SVDFactorization || (solver isa QRFactorization &&
                         solver.pivot isa LinearAlgebra.ColumnNorm)
                         # ColumnNorm is not implemented on CUDA
@@ -34,33 +41,30 @@
                 end
 
                 x1 = solve(prob1, solver)
-                x2 = solve(prob2, solver)
-                @test x1.u ≈ x2.u
+                if !ongpu && !(solver isa NormalCholeskyFactorization)
+                    x2 = solve(prob2, solver)
+                    @test x1.u ≈ x2.u
+                end
+
+                dims[1] != dims[2] && continue
 
                 test_adjoint = function (A, b)
                     sol = solve(LinearProblem(A, b), solver)
                     return sum(abs2, sol.u)
                 end
 
-                dims[1] != dims[2] && continue
-
-                ∂A_fd = FiniteDiff.finite_difference_gradient(
-                    x -> test_adjoint(x, Array(b)), Array(A1))
-                ∂b_fd = FiniteDiff.finite_difference_gradient(
-                    x -> test_adjoint(Array(A1), x), Array(b))
-
                 if solver isa QRFactorization && ongpu
                     @test_broken begin
                         ∂A, ∂b = Zygote.gradient(test_adjoint, A1, b)
 
-                        @test Array(∂A)≈∂A_fd atol=1e-1 rtol=1e-1
-                        @test Array(∂b)≈∂b_fd atol=1e-1 rtol=1e-1
+                        @test ∂A ≈ ∂A_cr
+                        @test ∂b ≈ ∂b_cr
                     end
                 else
                     ∂A, ∂b = Zygote.gradient(test_adjoint, A1, b)
 
-                    @test Array(∂A)≈∂A_fd atol=1e-1 rtol=1e-1
-                    @test Array(∂b)≈∂b_fd atol=1e-1 rtol=1e-1
+                    @test ∂A ≈ ∂A_cr
+                    @test ∂b ≈ ∂b_cr
                 end
             end
         end

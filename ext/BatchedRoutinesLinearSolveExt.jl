@@ -2,8 +2,12 @@ module BatchedRoutinesLinearSolveExt
 
 using ArrayInterface: ArrayInterface
 using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalOperator, getdata
+using ChainRulesCore: ChainRulesCore, NoTangent
+using FastClosures: @closure
 using LinearAlgebra: LinearAlgebra
-using LinearSolve: LinearSolve
+using LinearSolve: LinearSolve, SciMLBase
+
+const CRC = ChainRulesCore
 
 # Overload LinearProblem, else causing problems in the adjoint code
 function LinearSolve.LinearProblem(op::UniformBlockDiagonalOperator, b, args...; kwargs...)
@@ -123,6 +127,73 @@ end
 function LinearSolve.do_factorization(
         alg::LinearSolve.SVDFactorization, A::UniformBlockDiagonalOperator, b, u)
     return LinearAlgebra.svd!(A; alg.full, alg.alg)
+end
+
+# We need a custom rrule here to prevent spurios gradients for zero blocks
+# Copied from https://github.com/SciML/LinearSolve.jl/blob/7911113c6b14b6897cc356e277ccd5a98faa7dd7/src/adjoint.jl#L31 except the Lazy Arrays part
+function CRC.rrule(::typeof(SciMLBase.solve),
+        prob::SciMLBase.LinearProblem{T1, T2, <:UniformBlockDiagonalOperator},
+        alg::LinearSolve.SciMLLinearSolveAlgorithm, args...;
+        alias_A=LinearSolve.default_alias_A(alg, prob.A, prob.b), kwargs...) where {T1, T2}
+    cache = SciMLBase.init(prob, alg, args...; kwargs...)
+    (; A, sensealg) = cache
+
+    @assert sensealg isa LinearSolve.LinearSolveAdjoint "Currently only `LinearSolveAdjoint` is supported for adjoint sensitivity analysis."
+
+    # Decide if we need to cache `A` and `b` for the reverse pass
+    A_ = A
+    if sensealg.linsolve === missing
+        # We can reuse the factorization so no copy is needed
+        # Krylov Methods don't modify `A`, so it's safe to just reuse it
+        # No Copy is needed even for the default case
+        if !(alg isa LinearSolve.AbstractFactorization ||
+             alg isa LinearSolve.AbstractKrylovSubspaceMethod ||
+             alg isa LinearSolve.DefaultLinearSolver)
+            A_ = alias_A ? deepcopy(A) : A
+        end
+    else
+        A_ = deepcopy(A)
+    end
+
+    sol = SciMLBase.solve!(cache)
+
+    proj_A = CRC.ProjectTo(getdata(A))
+    proj_b = CRC.ProjectTo(prob.b)
+
+    ∇linear_solve = @closure ∂sol -> begin
+        ∂u = ∂sol.u
+        if sensealg.linsolve === missing
+            λ = if cache.cacheval isa LinearAlgebra.Factorization
+                cache.cacheval' \ ∂u
+            elseif cache.cacheval isa Tuple &&
+                   cache.cacheval[1] isa LinearAlgebra.Factorization
+                first(cache.cacheval)' \ ∂u
+            elseif alg isa LinearSolve.AbstractKrylovSubspaceMethod
+                invprob = SciMLBase.LinearProblem(transpose(cache.A), ∂u)
+                SciMLBase.solve(invprob, alg; cache.abstol, cache.reltol, cache.verbose).u
+            elseif alg isa LinearSolve.DefaultLinearSolver
+                LinearSolve.defaultalg_adjoint_eval(cache, ∂u)
+            else
+                invprob = SciMLBase.LinearProblem(transpose(A_), ∂u) # We cached `A`
+                SciMLBase.solve(invprob, alg; cache.abstol, cache.reltol, cache.verbose).u
+            end
+        else
+            invprob = SciMLBase.LinearProblem(transpose(A_), ∂u) # We cached `A`
+            λ = SciMLBase.solve(
+                invprob, sensealg.linsolve; cache.abstol, cache.reltol, cache.verbose).u
+        end
+
+        uᵀ = reshape(sol.u, 1, :, BatchedRoutines.nbatches(A))
+        ∂A = UniformBlockDiagonalOperator(proj_A(BatchedRoutines.batched_mul(
+            reshape(λ, :, 1, BatchedRoutines.nbatches(A)), -uᵀ)))
+        ∂b = proj_b(λ)
+        ∂prob = SciMLBase.LinearProblem(∂A, ∂b, NoTangent())
+
+        return (
+            NoTangent(), ∂prob, NoTangent(), ntuple(Returns(NoTangent()), length(args))...)
+    end
+
+    return sol, ∇linear_solve
 end
 
 end
