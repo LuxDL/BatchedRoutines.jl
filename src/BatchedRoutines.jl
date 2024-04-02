@@ -3,8 +3,9 @@ module BatchedRoutines
 import PrecompileTools: @recompile_invalidations
 
 @recompile_invalidations begin
-    using ADTypes: AutoFiniteDiff, AutoForwardDiff, AutoReverseDiff, AutoSparseForwardDiff,
-                   AutoSparsePolyesterForwardDiff, AutoPolyesterForwardDiff, AutoZygote
+    using ADTypes: ADTypes, AbstractADType, AutoFiniteDiff, AutoForwardDiff,
+                   AutoReverseDiff, AutoSparseForwardDiff, AutoSparsePolyesterForwardDiff,
+                   AutoPolyesterForwardDiff, AutoZygote
     using Adapt: Adapt
     using ArrayInterface: ArrayInterface, parameterless_type
     using ChainRulesCore: ChainRulesCore, HasReverseMode, NoTangent, RuleConfig
@@ -14,6 +15,7 @@ import PrecompileTools: @recompile_invalidations
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!, pinv
     using LuxDeviceUtils: LuxDeviceUtils, get_device
+    using SciMLBase: SciMLBase, NonlinearProblem, NonlinearLeastSquaresProblem, ReturnCode
     using SciMLOperators: SciMLOperators, AbstractSciMLOperator
 end
 
@@ -40,23 +42,33 @@ const AutoAllForwardDiff{CK} = Union{<:AutoForwardDiff{CK}, <:AutoSparseForwardD
 const BatchedVector{T} = AbstractMatrix{T}
 const BatchedMatrix{T} = AbstractArray{T, 3}
 
+abstract type AbstractBatchedNonlinearAlgorithm <: SciMLBase.AbstractNonlinearAlgorithm end
+
 @inline _is_extension_loaded(::Val) = false
+
+include("operator.jl")
 
 include("api.jl")
 include("helpers.jl")
 
-include("operator.jl")
 include("factorization.jl")
+
+include("nlsolve/utils.jl")
+include("nlsolve/batched_raphson.jl")
 
 include("impl/batched_mul.jl")
 include("impl/batched_gmres.jl")
 
 include("chainrules.jl")
 
+# Core
 export AutoFiniteDiff, AutoForwardDiff, AutoReverseDiff, AutoZygote
 export batched_adjoint, batched_gradient, batched_jacobian, batched_pickchunksize,
        batched_mul, batched_pinv, batched_transpose
 export batchview, nbatches
 export UniformBlockDiagonalOperator
+
+# Nonlinear Solvers
+export BatchedSimpleNewtonRaphson, BatchedSimpleGaussNewton
 
 end

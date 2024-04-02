@@ -5,7 +5,8 @@ using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalOperator, getdata
 using ChainRulesCore: ChainRulesCore, NoTangent
 using FastClosures: @closure
 using LinearAlgebra: LinearAlgebra
-using LinearSolve: LinearSolve, SciMLBase
+using LinearSolve: LinearSolve
+using SciMLBase: SciMLBase
 
 const CRC = ChainRulesCore
 
@@ -113,7 +114,7 @@ function LinearSolve.solve!(cache::LinearSolve.LinearCache{<:UniformBlockDiagona
     y = LinearAlgebra.ldiv!(
         cache.u, LinearSolve.@get_cacheval(cache, :NormalCholeskyFactorization),
         A' * cache.b)
-    return LinearSolve.SciMLBase.build_linear_solution(alg, y, nothing, cache)
+    return SciMLBase.build_linear_solution(alg, y, nothing, cache)
 end
 
 # SVDFactorization
