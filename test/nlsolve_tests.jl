@@ -1,6 +1,6 @@
 @testitem "Batched Nonlinear Solvers" setup=[SharedTestSetup] begin
-    using Chairmarks, ForwardDiff, SciMLBase, SciMLSensitivity, SimpleNonlinearSolve,
-          Statistics, Zygote
+    using Chairmarks, ForwardDiff, LinearSolve, SciMLBase, SciMLSensitivity,
+          SimpleNonlinearSolve, Statistics, Zygote
 
     testing_f(u, p) = u .^ 2 .+ u .^ 3 .- u .- p
 
@@ -55,8 +55,15 @@
         return sum(abs2, solve(prob, BatchedSimpleNewtonRaphson()).u)
     end)
 
-    @test ∂p3 ≈ ∂p4
-    @test ∂p1 ≈ ∂p4
+    ∂p5 = only(Zygote.gradient(p) do p
+        prob = NonlinearProblem(testing_f, u0, p)
+        sensealg = SteadyStateAdjoint(; linsolve=KrylovJL_GMRES())
+        return sum(abs2, solve(prob, BatchedSimpleNewtonRaphson(); sensealg).u)
+    end)
+
+    @test ∂p1≈∂p3 atol=1e-5
+    @test ∂p3≈∂p4 atol=1e-5
+    @test ∂p4≈∂p5 atol=1e-5
 
     zygote_nlsolve_timing = @be Zygote.gradient($p) do p
         prob = NonlinearProblem(testing_f, u0, p)
