@@ -24,3 +24,6 @@ end
 @inline function __get_tolerance(abstol, ::Type{T}) where {T}
     return abstol === nothing ? real(oneunit(T)) * (eps(real(one(T))))^(4 // 5) : abstol
 end
+
+const BatchedNonlinearSolution{T, N, uType, R, P, O, uType2, S, Tr} = NonlinearSolution{
+    T, N, uType, R, P, <:AbstractBatchedNonlinearAlgorithm, O, uType2, S, Tr}

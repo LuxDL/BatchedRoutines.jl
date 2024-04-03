@@ -23,8 +23,8 @@ end
 
 for f in (
     :batched_transpose, :batched_adjoint, :batched_inv, :batched_pinv, :batched_reshape)
-    @eval function $(f)(op::UniformBlockDiagonalOperator, args...)
-        return UniformBlockDiagonalOperator($(f)(op.data, args...))
+    @eval function $(f)(op::UniformBlockDiagonalOperator, args...; kwargs...)
+        return UniformBlockDiagonalOperator($(f)(op.data, args...; kwargs...))
     end
 end
 
@@ -60,7 +60,7 @@ end
 
 for f in (:transpose, :adjoint)
     batched_f = Symbol("batched_", f)
-    @eval (Base.$(f))(op::UniformBlockDiagonalOperator) = $(batched_f)(op)
+    @eval (Base.$(f))(op::UniformBlockDiagonalOperator) = $(batched_f)(op; copy=Val(true))
 end
 
 @inline function Base.size(op::UniformBlockDiagonalOperator)

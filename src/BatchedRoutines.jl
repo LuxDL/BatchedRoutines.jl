@@ -15,7 +15,8 @@ import PrecompileTools: @recompile_invalidations
     using LinearAlgebra: BLAS, ColumnNorm, LinearAlgebra, NoPivot, RowMaximum, RowNonZero,
                          mul!, pinv
     using LuxDeviceUtils: LuxDeviceUtils, get_device
-    using SciMLBase: SciMLBase, NonlinearProblem, NonlinearLeastSquaresProblem, ReturnCode
+    using SciMLBase: SciMLBase, NonlinearProblem, NonlinearLeastSquaresProblem,
+                     NonlinearSolution, ReturnCode
     using SciMLOperators: SciMLOperators, AbstractSciMLOperator
 end
 

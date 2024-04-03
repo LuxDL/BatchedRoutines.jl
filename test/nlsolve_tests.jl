@@ -1,5 +1,6 @@
 @testitem "Batched Nonlinear Solvers" setup=[SharedTestSetup] begin
-    using Chairmarks, ForwardDiff, SciMLBase, SimpleNonlinearSolve, Statistics, Zygote
+    using Chairmarks, ForwardDiff, SciMLBase, SciMLSensitivity, SimpleNonlinearSolve,
+          Statistics, Zygote
 
     testing_f(u, p) = u .^ 2 .+ u .^ 3 .- u .- p
 
@@ -16,8 +17,8 @@
     nlsolve_timing = @be solve($prob, $SimpleNewtonRaphson())
     batched_timing = @be solve($prob, $BatchedSimpleNewtonRaphson())
 
-    @info "SimpleNonlinearSolve Timing: $(median(nlsolve_timing))."
-    @info "BatchedSimpleNewtonRaphson Timing: $(median(batched_timing))."
+    println("SimpleNonlinearSolve Timing: $(median(nlsolve_timing)).")
+    println("BatchedSimpleNewtonRaphson Timing: $(median(batched_timing)).")
 
     ∂p1 = ForwardDiff.gradient(p) do p
         prob = NonlinearProblem(testing_f, u0, p)
@@ -41,6 +42,32 @@
         return sum(abs2, solve(prob, BatchedSimpleNewtonRaphson()).u)
     end
 
-    @info "ForwardDiff SimpleNonlinearSolve Timing: $(median(fwdiff_nlsolve_timing))."
-    @info "ForwardDiff BatchedNonlinearSolve Timing: $(median(fwdiff_batched_timing))."
+    println("ForwardDiff SimpleNonlinearSolve Timing: $(median(fwdiff_nlsolve_timing)).")
+    println("ForwardDiff BatchedNonlinearSolve Timing: $(median(fwdiff_batched_timing)).")
+
+    ∂p3 = only(Zygote.gradient(p) do p
+        prob = NonlinearProblem(testing_f, u0, p)
+        return sum(abs2, solve(prob, SimpleNewtonRaphson()).u)
+    end)
+
+    ∂p4 = only(Zygote.gradient(p) do p
+        prob = NonlinearProblem(testing_f, u0, p)
+        return sum(abs2, solve(prob, BatchedSimpleNewtonRaphson()).u)
+    end)
+
+    @test ∂p3 ≈ ∂p4
+    @test ∂p1 ≈ ∂p4
+
+    zygote_nlsolve_timing = @be Zygote.gradient($p) do p
+        prob = NonlinearProblem(testing_f, u0, p)
+        return sum(abs2, solve(prob, SimpleNewtonRaphson()).u)
+    end
+
+    zygote_batched_timing = @be Zygote.gradient($p) do p
+        prob = NonlinearProblem(testing_f, u0, p)
+        return sum(abs2, solve(prob, BatchedSimpleNewtonRaphson()).u)
+    end
+
+    println("Zygote SimpleNonlinearSolve Timing: $(median(zygote_nlsolve_timing)).")
+    println("Zygote BatchedNonlinearSolve Timing: $(median(zygote_batched_timing)).")
 end
