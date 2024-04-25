@@ -167,3 +167,6 @@ end
 CRC.@non_differentiable fill_like(::Any...)
 CRC.@non_differentiable zeros_like(::Any...)
 CRC.@non_differentiable ones_like(::Any...)
+
+@inline _wrap_batched_operator(x::AbstractArray{T, 3}) where {T} = UniformBlockDiagonalOperator(x)
+@inline _wrap_batched_operator(x::UniformBlockDiagonalOperator) = x

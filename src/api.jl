@@ -62,16 +62,24 @@ batched_mul!(C, A, B, α=true, β=false) = _batched_mul!(C, A, B, α, β)
 
 Transpose the first two dimensions of `X`.
 """
-batched_transpose(X::BatchedMatrix) = PermutedDimsArray(X, (2, 1, 3))
-batched_transpose(X::AbstractMatrix) = reshape(X, 1, size(X, 1), size(X, 2))
+function batched_transpose(X::BatchedMatrix; copy::Val{C}=Val(false)) where {C}
+    C || return PermutedDimsArray(X, (2, 1, 3))
+    return permutedims(X, (2, 1, 3))
+end
+function batched_transpose(X::AbstractMatrix; copy::Val{C}=Val(false)) where {C}
+    return reshape(X, 1, size(X, 1), size(X, 2))
+end
 
 """
     batched_adjoint(X::AbstractArray{T, 3}) where {T}
 
 Adjoint the first two dimensions of `X`.
 """
-batched_adjoint(X::BatchedMatrix{<:Real}) = batched_transpose(X)
-batched_adjoint(X::BatchedMatrix) = mapfoldl(adjoint, _cat3, batchview(X))
+batched_adjoint(X::BatchedMatrix{<:Real}; copy::Val{C}=Val(false)) where {C} = batched_transpose(
+    X; copy)
+function batched_adjoint(X::BatchedMatrix; copy::Val{C}=Val(false)) where {C}
+    return mapfoldl(adjoint, _cat3, batchview(X))
+end
 
 """
     nbatches(A::AbstractArray)

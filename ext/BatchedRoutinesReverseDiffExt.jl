@@ -2,7 +2,8 @@ module BatchedRoutinesReverseDiffExt
 
 using ADTypes: AutoReverseDiff, AutoForwardDiff
 using ArrayInterface: ArrayInterface
-using BatchedRoutines: BatchedRoutines, batched_pickchunksize, _assert_type
+using BatchedRoutines: BatchedRoutines, batched_pickchunksize, _assert_type,
+                       UniformBlockDiagonalOperator, getdata
 using ChainRulesCore: ChainRulesCore, NoTangent
 using ConcreteStructs: @concrete
 using FastClosures: @closure
@@ -28,6 +29,21 @@ function BatchedRoutines._batched_gradient(::AutoReverseDiff, f::F, u) where {F}
     ReverseDiff.reverse_pass!(tape)
 
     return ∂u
+end
+
+# ReverseDiff compatible `UniformBlockDiagonalOperator`
+@inline function ReverseDiff.track(
+        op::UniformBlockDiagonalOperator, tp::ReverseDiff.InstructionTape)
+    return UniformBlockDiagonalOperator(ReverseDiff.track(getdata(op), tp))
+end
+
+@inline function ReverseDiff.deriv(x::UniformBlockDiagonalOperator)
+    return UniformBlockDiagonalOperator(ReverseDiff.deriv(getdata(x)))
+end
+
+@inline function ReverseDiff.value!(
+        op::UniformBlockDiagonalOperator, val::UniformBlockDiagonalOperator)
+    ReverseDiff.value!(getdata(op), getdata(val))
 end
 
 # Chain rules integration

@@ -1,18 +1,3 @@
-module BatchedRoutinesForwardDiffExt
-
-using ADTypes: AutoForwardDiff
-using ArrayInterface: parameterless_type
-using BatchedRoutines: BatchedRoutines, UniformBlockDiagonalOperator, batched_jacobian,
-                       batched_mul, batched_pickchunksize, _assert_type
-using ChainRulesCore: ChainRulesCore
-using FastClosures: @closure
-using ForwardDiff: ForwardDiff
-using LuxDeviceUtils: LuxDeviceUtils, get_device
-
-const CRC = ChainRulesCore
-
-@inline BatchedRoutines._is_extension_loaded(::Val{:ForwardDiff}) = true
-
 # api.jl
 function BatchedRoutines.batched_pickchunksize(
         X::AbstractArray{T, N}, n::Int=ForwardDiff.DEFAULT_CHUNK_THRESHOLD) where {T, N}
@@ -241,6 +226,4 @@ end
     T = promote_type(eltype(x), eltype(u))
     partials = ForwardDiff.Partials{1, T}.(tuple.(u))
     return ForwardDiff.Dual{Tag, T, 1}.(x, reshape(partials, size(x)))
-end
-
 end
