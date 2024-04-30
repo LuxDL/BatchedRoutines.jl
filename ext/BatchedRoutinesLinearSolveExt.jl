@@ -56,6 +56,26 @@ function LinearSolve.do_factorization(
 end
 
 # LUFactorization
+function SciMLBase.solve!(cache::LinearSolve.LinearCache{<:UniformBlockDiagonalOperator},
+        alg::LinearSolve.LUFactorization; kwargs...)
+    A = cache.A
+    if cache.isfresh
+        fact = LinearAlgebra.lu!(A; check=false)
+        cache.cacheval = fact
+
+        if !LinearAlgebra.issuccess(fact)
+            return SciMLBase.build_linear_solution(
+                alg, cache.u, nothing, cache; retcode=ReturnCode.Failure)
+        end
+
+        cache.isfresh = false
+    end
+
+    F = LinearSolve.@get_cacheval(cache, :LUFactorization)
+    y = LinearSolve._ldiv!(cache.u, F, cache.b)
+    return SciMLBase.build_linear_solution(alg, y, nothing, cache)
+end
+
 function LinearSolve.init_cacheval(
         alg::LinearSolve.LUFactorization, A::UniformBlockDiagonalOperator, b, u, Pl, Pr,
         maxiters::Int, abstol, reltol, verbose::Bool, ::LinearSolve.OperatorAssumptions)
